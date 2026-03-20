@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <!-- Rounded rectangle background -->
+  <rect x="0" y="0" width="192" height="192" rx="38" ry="38" fill="#d4845a"/>
+
+  <!-- Cookie body -->
+  <circle cx="96" cy="96" r="52" fill="#f5e6d3" stroke="#e8c9a8" stroke-width="2"/>
+
+  <!-- Cookie edge texture (subtle scalloped edge) -->
+  <circle cx="96" cy="96" r="50" fill="none" stroke="#e0bb96" stroke-width="1.5" stroke-dasharray="8 4"/>
+
+  <!-- Chocolate chips -->
+  <ellipse cx="80" cy="78" rx="6" ry="5" fill="#5c3a1e" transform="rotate(-15 80 78)"/>
+  <ellipse cx="110" cy="72" rx="5.5" ry="4.5" fill="#6b4226" transform="rotate(20 110 72)"/>
+  <ellipse cx="76" cy="105" rx="5" ry="4.5" fill="#6b4226" transform="rotate(10 76 105)"/>
+  <ellipse cx="105" cy="100" rx="6" ry="5" fill="#5c3a1e" transform="rotate(-25 105 100)"/>
+  <ellipse cx="92" cy="118" rx="5.5" ry="4.5" fill="#5c3a1e" transform="rotate(5 92 118)"/>
+  <ellipse cx="118" cy="90" rx="4.5" ry="4" fill="#6b4226" transform="rotate(-10 118 90)"/>
+  <ellipse cx="88" cy="88" rx="4" ry="3.5" fill="#5c3a1e" transform="rotate(30 88 88)"/>
+
+  <!-- Cookie surface cracks -->
+  <path d="M72 90 Q78 86 82 92" fill="none" stroke="#d4b896" stroke-width="1" stroke-linecap="round"/>
+  <path d="M100 108 Q106 112 112 107" fill="none" stroke="#d4b896" stroke-width="1" stroke-linecap="round"/>
+  <path d="M96 74 Q100 80 97 84" fill="none" stroke="#d4b896" stroke-width="1" stroke-linecap="round"/>
+</svg>

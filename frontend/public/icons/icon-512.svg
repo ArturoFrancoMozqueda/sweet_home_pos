@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Rounded rectangle background -->
+  <rect x="0" y="0" width="512" height="512" rx="102" ry="102" fill="#d4845a"/>
+
+  <!-- Subtle inner shadow / glow -->
+  <rect x="8" y="8" width="496" height="496" rx="96" ry="96" fill="none" stroke="#c07348" stroke-width="2" opacity="0.3"/>
+
+  <!-- Cookie body with gradient -->
+  <defs>
+    <radialGradient id="cookieGrad" cx="45%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#f7edd8"/>
+      <stop offset="100%" stop-color="#e8c9a0"/>
+    </radialGradient>
+    <filter id="cookieShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#8b4520" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Cookie circle -->
+  <circle cx="256" cy="256" r="140" fill="url(#cookieGrad)" filter="url(#cookieShadow)" stroke="#d4b08a" stroke-width="3"/>
+
+  <!-- Cookie edge texture -->
+  <circle cx="256" cy="256" r="135" fill="none" stroke="#ddc4a0" stroke-width="2" stroke-dasharray="14 8"/>
+
+  <!-- Chocolate chips with subtle highlights -->
+  <!-- Chip 1 -->
+  <ellipse cx="212" cy="208" rx="16" ry="14" fill="#4a2c12" transform="rotate(-15 212 208)"/>
+  <ellipse cx="210" cy="205" rx="8" ry="5" fill="#5c3a1e" transform="rotate(-15 210 205)" opacity="0.6"/>
+
+  <!-- Chip 2 -->
+  <ellipse cx="296" cy="192" rx="15" ry="12" fill="#533118" transform="rotate(20 296 192)"/>
+  <ellipse cx="294" cy="189" rx="7" ry="4.5" fill="#6b4226" transform="rotate(20 294 189)" opacity="0.6"/>
+
+  <!-- Chip 3 -->
+  <ellipse cx="200" cy="280" rx="14" ry="12" fill="#533118" transform="rotate(10 200 280)"/>
+  <ellipse cx="198" cy="277" rx="7" ry="4" fill="#6b4226" transform="rotate(10 198 277)" opacity="0.6"/>
+
+  <!-- Chip 4 -->
+  <ellipse cx="280" cy="268" rx="16" ry="14" fill="#4a2c12" transform="rotate(-25 280 268)"/>
+  <ellipse cx="278" cy="265" rx="8" ry="5" fill="#5c3a1e" transform="rotate(-25 278 265)" opacity="0.6"/>
+
+  <!-- Chip 5 -->
+  <ellipse cx="244" cy="316" rx="15" ry="13" fill="#4a2c12" transform="rotate(5 244 316)"/>
+  <ellipse cx="242" cy="313" rx="7.5" ry="4.5" fill="#5c3a1e" transform="rotate(5 242 313)" opacity="0.6"/>
+
+  <!-- Chip 6 -->
+  <ellipse cx="316" cy="240" rx="12" ry="11" fill="#533118" transform="rotate(-10 316 240)"/>
+  <ellipse cx="314" cy="237" rx="6" ry="4" fill="#6b4226" transform="rotate(-10 314 237)" opacity="0.6"/>
+
+  <!-- Chip 7 -->
+  <ellipse cx="232" cy="236" rx="11" ry="10" fill="#4a2c12" transform="rotate(30 232 236)"/>
+  <ellipse cx="230" cy="233" rx="5.5" ry="3.5" fill="#5c3a1e" transform="rotate(30 230 233)" opacity="0.6"/>
+
+  <!-- Cookie surface cracks -->
+  <path d="M188 240 Q204 228 218 248" fill="none" stroke="#c9a87a" stroke-width="2" stroke-linecap="round"/>
+  <path d="M264 288 Q280 300 300 286" fill="none" stroke="#c9a87a" stroke-width="2" stroke-linecap="round"/>
+  <path d="M252 196 Q262 214 256 226" fill="none" stroke="#c9a87a" stroke-width="2" stroke-linecap="round"/>
+  <path d="M300 210 Q310 220 306 232" fill="none" stroke="#c9a87a" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M220 296 Q228 306 224 314" fill="none" stroke="#c9a87a" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Subtle cookie texture dots -->
+  <circle cx="240" cy="200" r="2" fill="#d4b896" opacity="0.5"/>
+  <circle cx="276" cy="230" r="1.5" fill="#d4b896" opacity="0.4"/>
+  <circle cx="220" cy="260" r="2" fill="#d4b896" opacity="0.5"/>
+  <circle cx="300" cy="300" r="1.5" fill="#d4b896" opacity="0.4"/>
+  <circle cx="260" cy="280" r="1.5" fill="#d4b896" opacity="0.5"/>
+</svg>
