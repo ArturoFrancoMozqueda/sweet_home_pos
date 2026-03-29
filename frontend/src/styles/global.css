@@ -1,20 +1,46 @@
 :root {
+  /* Brand colors */
   --primary: #d4845a;
   --primary-light: #e8a87c;
   --primary-dark: #b5694a;
-  --bg: #fafafa;
+  --primary-soft: rgba(212, 132, 90, 0.12);
+  --primary-gradient: linear-gradient(135deg, #d4845a, #e8a87c);
+
+  /* Backgrounds */
+  --bg: #fef9f6;
   --bg-card: #ffffff;
-  --text: #333333;
-  --text-light: #888888;
-  --text-muted: #aaaaaa;
-  --border: #eeeeee;
+  --bg-accent: #fef3e2;
+
+  /* Text */
+  --text: #2c1810;
+  --text-light: #7a5c50;
+  --text-muted: #b8998e;
+
+  /* Borders */
+  --border: #f0e6e0;
+  --border-focus: var(--primary-light);
+
+  /* Status */
   --success: #27ae60;
-  --warning: #f39c12;
+  --success-soft: rgba(39, 174, 96, 0.1);
+  --warning: #e67e22;
+  --warning-soft: rgba(230, 126, 34, 0.1);
   --danger: #e74c3c;
-  --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --radius: 12px;
-  --radius-sm: 8px;
-  --nav-height: 64px;
+  --danger-soft: rgba(231, 76, 60, 0.1);
+
+  /* Shadows */
+  --shadow: 0 2px 12px rgba(180, 100, 60, 0.08);
+  --shadow-md: 0 4px 20px rgba(180, 100, 60, 0.12);
+  --shadow-lg: 0 8px 32px rgba(180, 100, 60, 0.16);
+
+  /* Radius */
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-xs: 6px;
+  --radius-pill: 999px;
+
+  /* Layout */
+  --nav-height: 72px;
   --header-height: 56px;
 }
 
@@ -31,11 +57,12 @@ html {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100dvh;
   overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 #root {
@@ -45,7 +72,7 @@ body {
 }
 
 button {
-  font-family: inherit;
+  font-family: 'Nunito', inherit;
   font-size: inherit;
   border: none;
   cursor: pointer;
@@ -55,10 +82,11 @@ button {
 
 input,
 select {
-  font-family: inherit;
-  font-size: 16px; /* prevents zoom on iOS */
+  font-family: 'Nunito', inherit;
+  font-size: 16px;
 }
 
+/* Layout */
 .page {
   flex: 1;
   padding: 16px;
@@ -69,12 +97,15 @@ select {
 }
 
 .page-title {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 600;
   color: var(--text);
   margin-bottom: 16px;
+  letter-spacing: 0.01em;
 }
 
+/* Card */
 .card {
   background: var(--bg-card);
   border-radius: var(--radius);
@@ -83,27 +114,35 @@ select {
   margin-bottom: 12px;
 }
 
+/* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 20px;
+  padding: 14px 20px;
   border-radius: var(--radius-sm);
-  font-weight: 600;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 700;
   font-size: 1rem;
-  transition: opacity 0.15s, transform 0.1s;
-  min-height: 48px;
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+  min-height: 52px;
+  letter-spacing: 0.01em;
 }
 
 .btn:active {
   transform: scale(0.97);
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 .btn-primary {
-  background: var(--primary);
+  background: var(--primary-gradient);
   color: #fff;
+  box-shadow: 0 4px 12px rgba(212, 132, 90, 0.35);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 6px 18px rgba(212, 132, 90, 0.45);
 }
 
 .btn-secondary {
@@ -114,6 +153,7 @@ select {
 .btn-success {
   background: var(--success);
   color: #fff;
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
 }
 
 .btn-danger {
@@ -126,45 +166,57 @@ select {
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
+/* Badges */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 8px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .badge-warning {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--warning-soft);
+  color: #9a4e00;
 }
 
 .badge-danger {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--danger-soft);
+  color: #9b1c1c;
 }
 
 .badge-success {
-  background: #d4edda;
-  color: #155724;
+  background: var(--success-soft);
+  color: #14532d;
 }
 
+/* Empty state */
 .empty-state {
   text-align: center;
-  padding: 40px 20px;
+  padding: 48px 20px;
   color: var(--text-light);
+}
+
+.empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+  opacity: 0.4;
 }
 
 .empty-state p {
   margin-top: 8px;
   font-size: 0.9rem;
+  color: var(--text-muted);
 }
 
+/* Toast */
 .toast {
   position: fixed;
   bottom: calc(var(--nav-height) + 16px);
@@ -173,20 +225,50 @@ select {
   background: var(--text);
   color: #fff;
   padding: 12px 24px;
-  border-radius: 24px;
+  border-radius: var(--radius-pill);
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
   z-index: 1000;
-  animation: toast-in 0.3s ease, toast-out 0.3s ease 2.7s forwards;
+  animation: toast-in 0.25s ease, toast-out 0.25s ease 2.75s forwards;
   white-space: nowrap;
+  box-shadow: var(--shadow-lg);
+}
+
+.toast.success {
+  background: var(--success);
+}
+
+.toast.error {
+  background: var(--danger);
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateX(-50%) translateY(16px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 @keyframes toast-out {
   from { opacity: 1; }
-  to { opacity: 0; }
+  to   { opacity: 0; }
+}
+
+/* Skeleton loading */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--border) 25%, #f8ede6 50%, var(--border) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

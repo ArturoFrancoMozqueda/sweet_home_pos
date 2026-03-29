@@ -1,4 +1,4 @@
-/* Bottom Navigation */
+/* ── Bottom Navigation ─────────────────────────────────────── */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -12,76 +12,112 @@
   justify-content: space-around;
   z-index: 100;
   padding-bottom: env(safe-area-inset-bottom, 0);
+  box-shadow: 0 -4px 20px rgba(180, 100, 60, 0.06);
 }
 
 .nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 8px 12px;
+  gap: 3px;
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-light);
+  color: var(--text-muted);
+  font-family: 'Nunito', sans-serif;
   font-size: 0.65rem;
+  font-weight: 600;
   min-width: 56px;
+  min-height: 44px;
   transition: color 0.2s;
+  position: relative;
 }
 
 .nav-item.active {
   color: var(--primary);
 }
 
-.nav-icon {
-  font-size: 1.3rem;
-  line-height: 1;
+.nav-item.active .nav-icon-wrap {
+  background: var(--primary-soft);
+  border-radius: var(--radius-xs);
 }
 
-/* Sync Indicator */
+.nav-icon-wrap {
+  padding: 4px 12px;
+  transition: background 0.2s;
+}
+
+.nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+}
+
+.nav-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── Sync Indicator ────────────────────────────────────────── */
 .sync-bar {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 7px 12px;
+  font-family: 'Nunito', sans-serif;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.sync-bar:active {
+  opacity: 0.7;
 }
 
 .sync-bar.online {
-  background: #d4edda;
-  color: #155724;
+  background: var(--success-soft);
+  color: #14532d;
 }
 
 .sync-bar.offline {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--warning-soft);
+  color: #7c2d12;
 }
 
 .sync-bar.syncing {
-  background: #d1ecf1;
-  color: #0c5460;
+  background: rgba(59, 130, 246, 0.1);
+  color: #1e40af;
 }
 
 .sync-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.sync-dot.online { background: var(--success); }
+.sync-dot.online  { background: var(--success); }
 .sync-dot.offline { background: var(--warning); }
 .sync-dot.syncing {
-  background: #17a2b8;
+  background: #3b82f6;
   animation: pulse 1s infinite;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.85); }
 }
 
-/* Product Grid */
+/* ── Product Grid ──────────────────────────────────────────── */
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -92,68 +128,78 @@
   background: var(--bg-card);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 14px 10px;
+  padding: 16px 12px;
   text-align: center;
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.15s;
-  min-height: 80px;
+  transition: transform 0.12s, box-shadow 0.15s, border-color 0.15s;
+  min-height: 88px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
   position: relative;
   user-select: none;
+  border: 2px solid transparent;
 }
 
 .product-card:active {
-  transform: scale(0.95);
+  transform: scale(0.94);
+  box-shadow: var(--shadow-md);
 }
 
 .product-card.in-cart {
-  border: 2px solid var(--primary);
+  border-color: var(--primary);
+  background: linear-gradient(160deg, #fff 60%, var(--primary-soft));
+  box-shadow: 0 4px 16px rgba(212, 132, 90, 0.2);
 }
 
 .product-card.out-of-stock {
-  opacity: 0.4;
+  opacity: 0.38;
   pointer-events: none;
 }
 
 .product-name {
+  font-family: 'Nunito', sans-serif;
   font-size: 0.8rem;
-  font-weight: 600;
-  line-height: 1.2;
+  font-weight: 700;
+  line-height: 1.25;
   color: var(--text);
 }
 
 .product-price {
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--primary);
+  letter-spacing: 0.01em;
 }
 
 .product-stock {
   font-size: 0.65rem;
   color: var(--text-muted);
+  font-weight: 600;
 }
 
 .cart-badge {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  background: var(--primary);
+  top: -7px;
+  right: -7px;
+  background: var(--primary-gradient);
   color: #fff;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(212, 132, 90, 0.4);
+  border: 2px solid var(--bg-card);
 }
 
-/* Cart */
+/* ── Cart ──────────────────────────────────────────────────── */
 .cart-section {
   background: var(--bg-card);
   border-radius: var(--radius);
@@ -166,18 +212,25 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--border);
+  font-family: 'Fredoka', sans-serif;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--bg-accent);
 }
 
 .cart-item {
   display: flex;
   align-items: center;
-  padding: 10px 16px;
+  padding: 11px 16px;
   border-bottom: 1px solid var(--border);
   gap: 10px;
+}
+
+.cart-item:last-of-type {
+  border-bottom: none;
 }
 
 .cart-item-info {
@@ -187,20 +240,23 @@
 
 .cart-item-name {
   font-size: 0.85rem;
-  font-weight: 500;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--text);
 }
 
 .cart-item-price {
   font-size: 0.75rem;
   color: var(--text-light);
+  margin-top: 1px;
 }
 
 .cart-item-subtotal {
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
   color: var(--primary);
   white-space: nowrap;
 }
@@ -208,34 +264,40 @@
 .qty-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .qty-btn {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: 1.15rem;
+  font-weight: 800;
   background: var(--border);
   color: var(--text);
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+  min-width: 36px;
 }
 
 .qty-btn:active {
-  background: var(--primary-light);
+  background: var(--primary);
   color: #fff;
+  transform: scale(0.92);
 }
 
 .qty-value {
-  font-weight: 700;
-  min-width: 20px;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  min-width: 22px;
   text-align: center;
+  color: var(--text);
 }
 
-/* Payment method */
+/* ── Payment Method ────────────────────────────────────────── */
 .payment-section {
   display: flex;
   gap: 10px;
@@ -244,21 +306,30 @@
 
 .payment-btn {
   flex: 1;
-  padding: 14px;
+  padding: 14px 10px;
   border-radius: var(--radius-sm);
   background: var(--bg-card);
   box-shadow: var(--shadow);
   text-align: center;
-  font-weight: 600;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 700;
   font-size: 0.9rem;
-  color: var(--text);
+  color: var(--text-light);
   border: 2px solid transparent;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 .payment-btn.selected {
   border-color: var(--primary);
   color: var(--primary);
+  background: linear-gradient(160deg, #fff 60%, var(--primary-soft));
+  box-shadow: 0 4px 14px rgba(212, 132, 90, 0.2);
 }
 
 .payment-btn:active {
@@ -266,19 +337,18 @@
 }
 
 .payment-icon {
-  font-size: 1.5rem;
-  display: block;
-  margin-bottom: 4px;
+  font-size: 1.6rem;
+  line-height: 1;
 }
 
-/* Low stock badge inline */
+/* ── Low stock indicator ───────────────────────────────────── */
 .low-stock-indicator {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   font-size: 0.7rem;
   color: var(--warning);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .low-stock-indicator.critical {
