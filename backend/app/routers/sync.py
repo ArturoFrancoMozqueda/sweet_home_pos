@@ -29,7 +29,7 @@ async def sync_sales(data: SyncRequest, db: AsyncSession = Depends(get_db)):
             client_uuid=sale_data.client_uuid,
             total=sale_data.total,
             payment_method=sale_data.payment_method,
-            created_at=sale_data.created_at,
+            created_at=sale_data.created_at.replace(tzinfo=None),
             synced_at=datetime.utcnow(),
         )
 

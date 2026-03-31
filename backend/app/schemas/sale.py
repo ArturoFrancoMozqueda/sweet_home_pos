@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 
 class SaleItemCreate(BaseModel):
@@ -17,13 +17,6 @@ class SaleCreate(BaseModel):
     payment_method: str
     created_at: datetime
     items: list[SaleItemCreate]
-
-    @field_validator("created_at", mode="after")
-    @classmethod
-    def strip_timezone(cls, v: datetime) -> datetime:
-        if v.tzinfo is not None:
-            return v.astimezone(timezone.utc).replace(tzinfo=None)
-        return v
 
 
 class SaleItemResponse(BaseModel):

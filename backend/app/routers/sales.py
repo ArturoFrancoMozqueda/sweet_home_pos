@@ -26,7 +26,7 @@ async def create_sale(data: SaleCreate, db: AsyncSession = Depends(get_db)):
         client_uuid=data.client_uuid,
         total=data.total,
         payment_method=data.payment_method,
-        created_at=data.created_at,
+        created_at=data.created_at.replace(tzinfo=None),
         synced_at=datetime.utcnow(),
     )
 
