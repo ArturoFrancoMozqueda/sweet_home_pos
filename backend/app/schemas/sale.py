@@ -18,10 +18,10 @@ class SaleCreate(BaseModel):
     created_at: datetime
     items: list[SaleItemCreate]
 
-    @field_validator("created_at", mode="before")
+    @field_validator("created_at", mode="after")
     @classmethod
     def strip_timezone(cls, v: datetime) -> datetime:
-        if isinstance(v, datetime) and v.tzinfo is not None:
+        if v.tzinfo is not None:
             return v.astimezone(timezone.utc).replace(tzinfo=None)
         return v
 
