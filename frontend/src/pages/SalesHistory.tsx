@@ -3,14 +3,20 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db, type DBSaleItem } from "../db/database";
 import { api } from "../services/api";
 
+function toUtcDate(dateStr: string): Date {
+  // Server returns naive strings (no Z) — treat them as UTC
+  if (!dateStr.endsWith("Z") && !dateStr.includes("+")) {
+    return new Date(dateStr + "Z");
+  }
+  return new Date(dateStr);
+}
+
 function formatTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+  return toUtcDate(dateStr).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
+  return toUtcDate(dateStr).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
 }
 
 interface ServerSale {
