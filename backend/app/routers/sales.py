@@ -1,10 +1,16 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
+
+from app.config import settings
 from app.database import get_db
 from app.models.product import Product
 from app.models.sale import Sale, SaleItem
@@ -68,11 +74,14 @@ async def get_sales(
         .order_by(Sale.created_at.desc())
     )
 
+    tz = ZoneInfo(settings.timezone)
     if date_from:
-        start = datetime.strptime(date_from, "%Y-%m-%d")
+        start = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=tz)
+        start = start.astimezone(timezone.utc).replace(tzinfo=None)
         query = query.where(Sale.created_at >= start)
     if date_to:
-        end = datetime.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+        end = datetime.strptime(date_to, "%Y-%m-%d").replace(tzinfo=tz, hour=23, minute=59, second=59)
+        end = end.astimezone(timezone.utc).replace(tzinfo=None)
         query = query.where(Sale.created_at <= end)
 
     query = query.limit(limit).offset(offset)
@@ -86,12 +95,15 @@ async def get_sales_count(
     date_to: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
+    tz = ZoneInfo(settings.timezone)
     query = select(func.count(Sale.id))
     if date_from:
-        start = datetime.strptime(date_from, "%Y-%m-%d")
+        start = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=tz)
+        start = start.astimezone(timezone.utc).replace(tzinfo=None)
         query = query.where(Sale.created_at >= start)
     if date_to:
-        end = datetime.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+        end = datetime.strptime(date_to, "%Y-%m-%d").replace(tzinfo=tz, hour=23, minute=59, second=59)
+        end = end.astimezone(timezone.utc).replace(tzinfo=None)
         query = query.where(Sale.created_at <= end)
     result = await db.execute(query)
     return {"count": result.scalar()}

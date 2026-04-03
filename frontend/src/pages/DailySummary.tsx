@@ -5,7 +5,11 @@ import type { DailyReport } from "../types";
 import { api } from "../services/api";
 
 function getTodayStr(): string {
-  return new Date().toISOString().split("T")[0];
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
+}
+
+function toMexicoDateStr(utcStr: string): string {
+  return new Date(utcStr).toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
 }
 
 function mergeUnsyncedIntoReport(
@@ -61,7 +65,7 @@ export function DailySummary() {
   // Local sales as fallback AND to patch server report with unsynced sales
   const localSales = useLiveQuery(async () => {
     const allSales = await db.sales.toArray();
-    return allSales.filter((s) => s.created_at.startsWith(todayStr));
+    return allSales.filter((s) => toMexicoDateStr(s.created_at) === todayStr);
   }, [todayStr], []);
 
   const localSaleItems = useLiveQuery(async () => {

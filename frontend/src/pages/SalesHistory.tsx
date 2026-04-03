@@ -31,7 +31,7 @@ interface ServerSale {
 
 export function SalesHistory() {
   const [dateFilter, setDateFilter] = useState(() => {
-    return new Date().toISOString().split("T")[0];
+    return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
   });
   const [serverSales, setServerSales] = useState<ServerSale[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,7 +53,8 @@ export function SalesHistory() {
   // Local unsynced sales (not yet on server)
   const localPending = useLiveQuery(async () => {
     const all = await db.sales.orderBy("created_at").reverse().toArray();
-    const filtered = dateFilter ? all.filter((s) => s.created_at.startsWith(dateFilter)) : all;
+    const toMxDate = (s: string) => new Date(s).toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
+    const filtered = dateFilter ? all.filter((s) => toMxDate(s.created_at) === dateFilter) : all;
     return filtered.filter((s) => !s.synced);
   }, [dateFilter], []);
 

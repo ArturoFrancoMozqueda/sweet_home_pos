@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,16 +16,16 @@ except ImportError:
 def _today_range(date_str: str | None = None):
     tz = ZoneInfo(settings.timezone)
     if date_str:
-        day = datetime.strptime(date_str, "%Y-%m-%d")
+        day = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=tz)
     else:
         day = datetime.now(tz)
     start = day.replace(hour=0, minute=0, second=0, microsecond=0)
     end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
-    # Remove tzinfo for naive comparison with DB
-    if start.tzinfo:
-        start = start.replace(tzinfo=None)
-        end = end.replace(tzinfo=None)
-    return start, end
+    # Convert CST boundaries to UTC naive for DB comparison
+    return (
+        start.astimezone(timezone.utc).replace(tzinfo=None),
+        end.astimezone(timezone.utc).replace(tzinfo=None),
+    )
 
 
 async def generate_daily_report(db: AsyncSession, date_str: str | None = None) -> dict:
