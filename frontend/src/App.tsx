@@ -11,18 +11,8 @@ import { SalesHistory } from "./pages/SalesHistory";
 import { Login } from "./pages/Login";
 import { Users } from "./pages/Users";
 
-function AppRoutes() {
-  const { user } = useAuth();
+function AuthenticatedApp({ user }: { user: import("./contexts/AuthContext").AuthUser }) {
   const { isOnline, isSyncing, triggerSync } = useOnlineStatus();
-
-  if (!user) {
-    return (
-      <Routes>
-        <Route path="*" element={<Login />} />
-      </Routes>
-    );
-  }
-
   return (
     <>
       <SyncIndicator isOnline={isOnline} isSyncing={isSyncing} onSync={triggerSync} />
@@ -42,6 +32,20 @@ function AppRoutes() {
       <ToastContainer />
     </>
   );
+}
+
+function AppRoutes() {
+  const { user } = useAuth();
+
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="*" element={<Login />} />
+      </Routes>
+    );
+  }
+
+  return <AuthenticatedApp user={user} />;
 }
 
 export function App() {

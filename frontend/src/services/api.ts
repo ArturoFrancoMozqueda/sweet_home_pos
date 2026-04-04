@@ -22,10 +22,12 @@ async function request(path: string, options: RequestInit = {}) {
     });
 
     if (response.status === 401) {
-      // Token expired or invalid — clear storage and force reload to login screen
+      // Only reload if user had a session (token expired). If there was never a
+      // token, silently throw so unauthenticated sync attempts don't loop.
+      const hadToken = !!localStorage.getItem("sweet_home_token");
       localStorage.removeItem("sweet_home_token");
       localStorage.removeItem("sweet_home_user");
-      window.location.reload();
+      if (hadToken) window.location.reload();
       throw new Error("Sesión expirada");
     }
 
