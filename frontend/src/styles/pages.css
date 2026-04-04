@@ -19,10 +19,11 @@
 }
 
 .login-logo {
-  width: 220px;
-  height: 220px;
+  width: 300px;
+  height: 300px;
   object-fit: contain;
-  margin-bottom: 8px;
+  margin-top: -100px;
+  margin-bottom: -60px;
 }
 
 .login-title {
