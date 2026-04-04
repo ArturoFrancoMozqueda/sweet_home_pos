@@ -1,3 +1,30 @@
+/* ── Product sheet ──────────────────────────────────────────── */
+.product-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+}
+
+.product-sheet {
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  padding: 24px 20px 40px;
+  width: 100%;
+  max-height: 85dvh;
+  overflow-y: auto;
+}
+
+.product-sheet-title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0 0 20px;
+}
+
 /* ── Login ──────────────────────────────────────────────────── */
 .login-page {
   min-height: 100dvh;

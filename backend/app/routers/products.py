@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models.product import Product
 from app.models.user import User
 from app.routers.auth import get_current_user, require_admin
-from app.schemas.product import ProductCreate, ProductResponse, ProductStockUpdate
+from app.schemas.product import ProductCreate, ProductResponse, ProductStockUpdate, ProductUpdate
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
@@ -49,6 +49,24 @@ async def update_stock(
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     product.stock = data.stock
+    await db.commit()
+    await db.refresh(product)
+    return product
+
+
+@router.put("/{product_id}", response_model=ProductResponse)
+async def update_product(
+    product_id: int,
+    data: ProductUpdate,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Product).where(Product.id == product_id))
+    product = result.scalars().first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(product, field, value)
     await db.commit()
     await db.refresh(product)
     return product
