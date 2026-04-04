@@ -1,8 +1,9 @@
 from datetime import datetime
 
+from __future__ import annotations
+
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import Optional
 
 from app.database import Base
 
@@ -16,7 +17,7 @@ class Sale(Base):
     payment_method: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
     items: Mapped[list["SaleItem"]] = relationship(
         back_populates="sale", cascade="all, delete-orphan"
