@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type DBSaleItem } from "../db/database";
 import { api } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
 
 function toUtcDate(dateStr: string): Date {
   // Server returns naive strings (no Z) — treat them as UTC
@@ -30,6 +31,7 @@ interface ServerSale {
 }
 
 export function SalesHistory() {
+  const { user, logout } = useAuth();
   const [dateFilter, setDateFilter] = useState(() => {
     return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
   });
@@ -83,7 +85,18 @@ export function SalesHistory() {
 
   return (
     <div className="page">
-      <h1 className="page-title">Historial de Ventas</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <h1 className="page-title" style={{ margin: 0 }}>
+          {user?.role === "admin" ? "Historial de Ventas" : "Mis Ventas"}
+        </h1>
+        <button
+          className="btn btn-secondary"
+          style={{ padding: "8px 14px", minHeight: "auto", fontSize: "0.85rem" }}
+          onClick={logout}
+        >
+          Cerrar sesión
+        </button>
+      </div>
 
       <div className="history-date-filter">
         <input

@@ -37,7 +37,7 @@ export function BottomNav() {
   const tabs = [
     { path: "/",          icon: icons.venta,      label: "Venta"      },
     { path: "/inventory", icon: icons.inventario, label: "Inventario" },
-    { path: "/history",   icon: icons.historial,  label: "Historial"  },
+    { path: "/history",   icon: icons.historial,  label: user?.role === "admin" ? "Historial" : "Mis Ventas" },
     ...(user?.role === "admin" ? [
       { path: "/summary", icon: icons.resumen,    label: "Resumen"    },
       { path: "/users",   icon: icons.usuarios,   label: "Usuarios"   },
