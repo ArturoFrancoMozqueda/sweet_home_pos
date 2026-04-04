@@ -3,10 +3,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.config import settings
 from app.database import async_session, engine, init_db
 from app.routers import products, reports, sales, sync
+from app.routers import auth as auth_router
 from app.seed import seed_products
 from app.services.scheduler import start_scheduler, stop_scheduler
 
@@ -14,13 +16,48 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+async def _seed_admin():
+    """Create default admin user if none exists."""
+    if not settings.admin_password:
+        logger.warning("ADMIN_PASSWORD not set — skipping admin seed")
+        return
+
+    from sqlalchemy import select
+    from app.models.user import User
+    from app.services.auth_service import hash_password
+
+    async with async_session() as db:
+        result = await db.execute(select(User).where(User.role == "admin"))
+        if result.scalars().first():
+            return  # Admin already exists
+
+        admin = User(
+            username=settings.admin_username,
+            password_hash=hash_password(settings.admin_password),
+            role="admin",
+        )
+        db.add(admin)
+        await db.commit()
+        logger.info(f"Admin user '{settings.admin_username}' created")
+
+
+async def _migrate_user_id():
+    """Idempotent migration: add user_id column to sales if missing."""
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            "ALTER TABLE sales ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)"
+        ))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Sweet Home POS...")
     await init_db()
+    await _migrate_user_id()
     async with async_session() as db:
         await seed_products(db)
+    await _seed_admin()
     start_scheduler()
     logger.info("Sweet Home POS ready")
     yield
@@ -45,6 +82,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router.router)
 app.include_router(products.router)
 app.include_router(sales.router)
 app.include_router(reports.router)

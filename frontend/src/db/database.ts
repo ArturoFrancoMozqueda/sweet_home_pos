@@ -26,6 +26,7 @@ export interface DBSale {
   payment_method: string;
   created_at: string;
   synced: number; // 0 = not synced, 1 = synced
+  user_id?: number;
 }
 
 class SweetHomeDB extends Dexie {
@@ -38,6 +39,12 @@ class SweetHomeDB extends Dexie {
     this.version(1).stores({
       products: "id, name, active",
       sales: "++id, client_uuid, created_at, synced",
+      saleItems: "++id, sale_uuid, product_id",
+    });
+    // Version 2: add user_id index to sales
+    this.version(2).stores({
+      products: "id, name, active",
+      sales: "++id, client_uuid, created_at, synced, user_id",
       saleItems: "++id, sale_uuid, product_id",
     });
   }

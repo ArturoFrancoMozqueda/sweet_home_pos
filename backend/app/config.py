@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     daily_report_minute: int = 0
     cors_origins: str = "http://localhost:5173"
     cron_secret: str = ""
+    jwt_secret: str = "changeme-use-a-real-secret-in-production"
+    jwt_expire_hours: int = 8
+    admin_username: str = "admin"
+    admin_password: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

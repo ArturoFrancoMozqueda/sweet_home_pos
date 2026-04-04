@@ -1,14 +1,10 @@
 import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 const icons = {
   venta: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 5h12M9 21a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z" />
-    </svg>
-  ),
-  catalogo: (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
     </svg>
   ),
   inventario: (
@@ -26,19 +22,27 @@ const icons = {
       <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
+  usuarios: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  ),
 };
-
-const tabs = [
-  { path: "/",          icon: icons.venta,      label: "Venta"      },
-  { path: "/catalog",   icon: icons.catalogo,   label: "Catálogo"   },
-  { path: "/inventory", icon: icons.inventario, label: "Inventario" },
-  { path: "/summary",   icon: icons.resumen,    label: "Resumen"    },
-  { path: "/history",   icon: icons.historial,  label: "Historial"  },
-];
 
 export function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const tabs = [
+    { path: "/",          icon: icons.venta,      label: "Venta"      },
+    { path: "/inventory", icon: icons.inventario, label: "Inventario" },
+    { path: "/history",   icon: icons.historial,  label: "Historial"  },
+    ...(user?.role === "admin" ? [
+      { path: "/summary", icon: icons.resumen,    label: "Resumen"    },
+      { path: "/users",   icon: icons.usuarios,   label: "Usuarios"   },
+    ] : []),
+  ];
 
   return (
     <nav className="bottom-nav" role="navigation" aria-label="Navegación principal">

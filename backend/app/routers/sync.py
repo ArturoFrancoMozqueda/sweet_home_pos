@@ -7,13 +7,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.product import Product
 from app.models.sale import Sale, SaleItem
+from app.models.user import User
+from app.routers.auth import get_current_user
 from app.schemas.sync import SyncRequest, SyncResponse
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
 
 
 @router.post("", response_model=SyncResponse)
-async def sync_sales(data: SyncRequest, db: AsyncSession = Depends(get_db)):
+async def sync_sales(
+    data: SyncRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     synced_uuids: list[str] = []
 
     for sale_data in data.sales:
@@ -31,6 +37,7 @@ async def sync_sales(data: SyncRequest, db: AsyncSession = Depends(get_db)):
             payment_method=sale_data.payment_method,
             created_at=sale_data.created_at.replace(tzinfo=None),
             synced_at=datetime.utcnow(),
+            user_id=current_user.id,
         )
 
         for item_data in sale_data.items:

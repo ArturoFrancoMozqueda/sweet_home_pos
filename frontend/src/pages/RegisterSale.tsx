@@ -4,6 +4,7 @@ import { db, type DBProduct } from "../db/database";
 import { syncToServer } from "../db/sync";
 import { ProductGrid } from "../components/ProductGrid";
 import { useToast } from "../components/Toast";
+import { useAuth } from "../contexts/AuthContext";
 import type { CartItem } from "../types";
 
 export function RegisterSale() {
@@ -11,6 +12,7 @@ export function RegisterSale() {
   const [paymentMethod, setPaymentMethod] = useState<"efectivo" | "transferencia" | null>(null);
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
+  const { user } = useAuth();
 
   const products = useLiveQuery(() => db.products.orderBy("name").toArray(), [], []);
 
@@ -60,6 +62,7 @@ export function RegisterSale() {
           payment_method: paymentMethod,
           created_at: now,
           synced: 0,
+          user_id: user?.id,
         });
 
         for (const item of cart) {

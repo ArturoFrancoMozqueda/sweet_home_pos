@@ -2,10 +2,13 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/database";
 import { api } from "../services/api";
 import { useToast } from "../components/Toast";
+import { useAuth } from "../contexts/AuthContext";
 
 export function Inventory() {
   const products = useLiveQuery(() => db.products.orderBy("name").toArray(), [], []);
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const readOnly = user?.role !== "admin";
 
   const adjustStock = async (productId: number, delta: number) => {
     const product = await db.products.get(productId);
@@ -46,7 +49,7 @@ export function Inventory() {
 
   return (
     <div className="page">
-      <h1 className="page-title">Inventario</h1>
+      <h1 className="page-title">Inventario{readOnly && <span style={{ fontSize: "0.75rem", fontWeight: 400, color: "var(--text-light)", marginLeft: 8 }}>(solo lectura)</span>}</h1>
 
       {lowStockCount > 0 && (
         <div className="card" style={{ background: "#fff3cd", marginBottom: 16 }}>
@@ -81,7 +84,7 @@ export function Inventory() {
                   <button
                     className="stock-btn"
                     onClick={() => adjustStock(product.id, -1)}
-                    disabled={product.stock <= 0}
+                    disabled={readOnly || product.stock <= 0}
                   >
                     -
                   </button>
@@ -90,6 +93,7 @@ export function Inventory() {
                     type="number"
                     value={product.stock}
                     onChange={(e) => setStock(product.id, e.target.value)}
+                    readOnly={readOnly}
                     style={{
                       width: 50,
                       textAlign: "center",
@@ -104,6 +108,7 @@ export function Inventory() {
                   <button
                     className="stock-btn"
                     onClick={() => adjustStock(product.id, 1)}
+                    disabled={readOnly}
                   >
                     +
                   </button>
