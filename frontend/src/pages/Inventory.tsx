@@ -221,93 +221,95 @@ export function Inventory() {
       {mode && (
         <div className="product-sheet-overlay" onClick={closeForm}>
           <div className="product-sheet" onClick={(e) => e.stopPropagation()}>
-            <h2 className="product-sheet-title">
-              {mode === "create" ? "Nuevo producto" : "Editar producto"}
-            </h2>
-            <form onSubmit={handleSave}>
-              <div className="login-field">
-                <label>Nombre</label>
-                <input
-                  type="text"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Nombre del producto"
-                  disabled={formSaving}
-                  autoFocus
-                />
-              </div>
-              <div className="login-field">
-                <label>Precio ($)</label>
-                <input
-                  type="number"
-                  value={formPrice}
-                  onChange={(e) => setFormPrice(e.target.value)}
-                  placeholder="0.00"
-                  step="0.01"
-                  min="0"
-                  disabled={formSaving}
-                />
-              </div>
-              {mode === "create" && (
+            <div className="product-sheet-handle" />
+            <div className="product-sheet-header">
+              <h2 className="product-sheet-title">
+                {mode === "create" ? "Nuevo producto" : "Editar producto"}
+              </h2>
+              <button
+                type="button"
+                className="product-sheet-close"
+                onClick={closeForm}
+                aria-label="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="product-sheet-body">
+              <form onSubmit={handleSave}>
                 <div className="login-field">
-                  <label>Stock inicial</label>
+                  <label>Nombre</label>
+                  <input
+                    type="text"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="Nombre del producto"
+                    disabled={formSaving}
+                    autoFocus
+                  />
+                </div>
+                <div className="login-field">
+                  <label>Precio ($)</label>
                   <input
                     type="number"
-                    value={formStock}
-                    onChange={(e) => setFormStock(e.target.value)}
-                    placeholder="0"
+                    value={formPrice}
+                    onChange={(e) => setFormPrice(e.target.value)}
+                    placeholder="0.00"
+                    step="0.01"
                     min="0"
                     disabled={formSaving}
                   />
                 </div>
-              )}
-              <div className="login-field">
-                <label>Alerta stock bajo (cantidad)</label>
-                <input
-                  type="number"
-                  value={formThreshold}
-                  onChange={(e) => setFormThreshold(e.target.value)}
-                  placeholder="5"
-                  min="0"
-                  disabled={formSaving}
-                />
-              </div>
-              {mode === "edit" && (
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                {mode === "create" && (
+                  <div className="login-field">
+                    <label>Stock inicial</label>
+                    <input
+                      type="number"
+                      value={formStock}
+                      onChange={(e) => setFormStock(e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      disabled={formSaving}
+                    />
+                  </div>
+                )}
+                <div className="login-field">
+                  <label>Alerta stock bajo (cantidad)</label>
                   <input
-                    type="checkbox"
-                    id="product-active"
-                    checked={formActive}
-                    onChange={(e) => setFormActive(e.target.checked)}
+                    type="number"
+                    value={formThreshold}
+                    onChange={(e) => setFormThreshold(e.target.value)}
+                    placeholder="5"
+                    min="0"
                     disabled={formSaving}
-                    style={{ width: 18, height: 18, cursor: "pointer" }}
                   />
-                  <label htmlFor="product-active" style={{ margin: 0, fontSize: "0.9rem", cursor: "pointer" }}>
-                    Producto activo
-                  </label>
                 </div>
-              )}
-              {formError && <p className="login-error">{formError}</p>}
-              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                  onClick={closeForm}
-                  disabled={formSaving}
-                >
-                  Cancelar
-                </button>
+                {mode === "edit" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                    <input
+                      type="checkbox"
+                      id="product-active"
+                      checked={formActive}
+                      onChange={(e) => setFormActive(e.target.checked)}
+                      disabled={formSaving}
+                      style={{ width: 18, height: 18, cursor: "pointer" }}
+                    />
+                    <label htmlFor="product-active" style={{ margin: 0, fontSize: "0.9rem", cursor: "pointer" }}>
+                      Producto activo
+                    </label>
+                  </div>
+                )}
+                {formError && <p className="login-error">{formError}</p>}
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  style={{ flex: 1 }}
+                  style={{ width: "100%", marginTop: 8 }}
                   disabled={formSaving || !formName.trim() || !formPrice}
                 >
                   {formSaving ? "Guardando..." : "Guardar"}
                 </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
         </div>
       )}
