@@ -31,8 +31,8 @@ export function RegisterSale() {
   };
 
   const updateQty = (productId: number, delta: number) => {
-    setCart((prev) => {
-      return prev
+    setCart((prev) =>
+      prev
         .map((c) => {
           if (c.product.id !== productId) return c;
           const newQty = c.quantity + delta;
@@ -40,8 +40,8 @@ export function RegisterSale() {
           if (newQty > c.product.stock) return c;
           return { ...c, quantity: newQty };
         })
-        .filter(Boolean) as CartItem[];
-    });
+        .filter(Boolean) as CartItem[]
+    );
   };
 
   const total = cart.reduce((sum, c) => sum + c.product.price * c.quantity, 0);
@@ -49,12 +49,10 @@ export function RegisterSale() {
   const handleRegister = async () => {
     if (cart.length === 0 || !paymentMethod) return;
     setSaving(true);
-
     try {
       const uuid = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      // Save sale to Dexie
       await db.transaction("rw", [db.sales, db.saleItems, db.products], async () => {
         await db.sales.add({
           client_uuid: uuid,
@@ -64,7 +62,6 @@ export function RegisterSale() {
           synced: 0,
           user_id: user?.id,
         });
-
         for (const item of cart) {
           await db.saleItems.add({
             sale_uuid: uuid,
@@ -74,8 +71,6 @@ export function RegisterSale() {
             unit_price: item.product.price,
             subtotal: item.product.price * item.quantity,
           });
-
-          // Discount local stock
           const current = await db.products.get(item.product.id);
           if (current) {
             await db.products.update(item.product.id, {
@@ -85,12 +80,10 @@ export function RegisterSale() {
         }
       });
 
-      // Reset form
       setCart([]);
       setPaymentMethod(null);
       showToast(`Venta registrada: $${total}`);
 
-      // Try to sync in background
       if (navigator.onLine) {
         syncToServer().catch(() => {});
       }
@@ -103,18 +96,26 @@ export function RegisterSale() {
   };
 
   return (
-    <div className="page">
-      <h1 className="page-title">Registrar Venta</h1>
+    <div className="sale-page">
+      {/* ── Catalog zone — scrollable ── */}
+      <div className="sale-catalog">
+        <h1 className="page-title">Registrar Venta</h1>
 
-      <ProductGrid
-        products={products ?? []}
-        cart={cart}
-        onAddToCart={addToCart}
-      />
+        {products && products.length > 0 ? (
+          <ProductGrid products={products} cart={cart} onAddToCart={addToCart} />
+        ) : (
+          <div className="empty-state">
+            <p style={{ fontSize: "2rem" }}>📦</p>
+            <p>No hay productos cargados. Sincroniza con el servidor.</p>
+          </div>
+        )}
+      </div>
 
-      {cart.length > 0 && (
-        <>
-          <div className="cart-section">
+      {/* ── Checkout zone — always visible ── */}
+      <div className="sale-footer">
+        {cart.length > 0 ? (
+          <div className="sale-footer-content">
+            {/* Cart header */}
             <div className="cart-header">
               <span>Carrito ({cart.length})</span>
               <button
@@ -125,67 +126,56 @@ export function RegisterSale() {
                 Limpiar
               </button>
             </div>
-            {cart.map((item) => (
-              <div key={item.product.id} className="cart-item">
-                <div className="cart-item-info">
-                  <div className="cart-item-name">{item.product.name}</div>
-                  <div className="cart-item-price">${item.product.price} c/u</div>
+
+            {/* Cart items — capped height, scrollable */}
+            <div className="cart-items-mini">
+              {cart.map((item) => (
+                <div key={item.product.id} className="cart-item">
+                  <div className="cart-item-info">
+                    <div className="cart-item-name">{item.product.name}</div>
+                    <div className="cart-item-price">${item.product.price} c/u</div>
+                  </div>
+                  <div className="qty-controls">
+                    <button className="qty-btn" onClick={() => updateQty(item.product.id, -1)}>-</button>
+                    <span className="qty-value">{item.quantity}</span>
+                    <button className="qty-btn" onClick={() => updateQty(item.product.id, 1)}>+</button>
+                  </div>
+                  <span className="cart-item-subtotal">${item.product.price * item.quantity}</span>
                 </div>
-                <div className="qty-controls">
-                  <button className="qty-btn" onClick={() => updateQty(item.product.id, -1)}>
-                    -
-                  </button>
-                  <span className="qty-value">{item.quantity}</span>
-                  <button className="qty-btn" onClick={() => updateQty(item.product.id, 1)}>
-                    +
-                  </button>
-                </div>
-                <span className="cart-item-subtotal">
-                  ${item.product.price * item.quantity}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <div className="payment-section">
+            {/* Payment method */}
+            <div className="payment-section">
+              <button
+                className={`payment-btn ${paymentMethod === "efectivo" ? "selected" : ""}`}
+                onClick={() => setPaymentMethod("efectivo")}
+              >
+                <span className="payment-icon">💵</span>
+                Efectivo
+              </button>
+              <button
+                className={`payment-btn ${paymentMethod === "transferencia" ? "selected" : ""}`}
+                onClick={() => setPaymentMethod("transferencia")}
+              >
+                <span className="payment-icon">📱</span>
+                Transferencia
+              </button>
+            </div>
+
+            {/* Register button */}
             <button
-              className={`payment-btn ${paymentMethod === "efectivo" ? "selected" : ""}`}
-              onClick={() => setPaymentMethod("efectivo")}
+              className="btn btn-primary btn-block register-btn"
+              onClick={handleRegister}
+              disabled={!paymentMethod || saving}
             >
-              <span className="payment-icon">💵</span>
-              Efectivo
-            </button>
-            <button
-              className={`payment-btn ${paymentMethod === "transferencia" ? "selected" : ""}`}
-              onClick={() => setPaymentMethod("transferencia")}
-            >
-              <span className="payment-icon">📱</span>
-              Transferencia
+              {saving ? "Guardando..." : `Registrar $${total}`}
             </button>
           </div>
-
-          <button
-            className="btn btn-primary btn-block register-btn"
-            onClick={handleRegister}
-            disabled={!paymentMethod || saving}
-          >
-            {saving ? "Guardando..." : `Registrar $${total}`}
-          </button>
-        </>
-      )}
-
-      {cart.length === 0 && products && products.length > 0 && (
-        <p style={{ textAlign: "center", color: "var(--text-light)", marginTop: 20, fontSize: "0.9rem" }}>
-          Toca un producto para agregarlo
-        </p>
-      )}
-
-      {(!products || products.length === 0) && (
-        <div className="empty-state">
-          <p style={{ fontSize: "2rem" }}>📦</p>
-          <p>No hay productos cargados. Sincroniza con el servidor.</p>
-        </div>
-      )}
+        ) : (
+          <p className="sale-footer-hint">Toca un producto para agregar al carrito</p>
+        )}
+      </div>
     </div>
   );
 }
