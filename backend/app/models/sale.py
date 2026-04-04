@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -17,9 +16,9 @@ class Sale(Base):
     payment_method: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
-    items: Mapped[list[SaleItem]] = relationship(
+    items: Mapped[list["SaleItem"]] = relationship(
         back_populates="sale", cascade="all, delete-orphan"
     )
 
@@ -35,4 +34,4 @@ class SaleItem(Base):
     unit_price: Mapped[float] = mapped_column(Float, nullable=False)
     subtotal: Mapped[float] = mapped_column(Float, nullable=False)
 
-    sale: Mapped[Sale] = relationship(back_populates="items")
+    sale: Mapped["Sale"] = relationship(back_populates="items")
