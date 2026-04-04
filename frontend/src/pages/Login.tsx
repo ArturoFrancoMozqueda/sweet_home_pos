@@ -25,9 +25,9 @@ export function Login() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-logo">🍪</div>
+        <img src="/icons/logo.png" className="login-logo" alt="Sweet Home" />
         <h1 className="login-title">Sweet Home</h1>
-        <p className="login-subtitle">Galletas y Postres</p>
+        <p className="login-subtitle">Horneando con amor</p>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="login-field">
