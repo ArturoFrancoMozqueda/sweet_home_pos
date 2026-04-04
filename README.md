@@ -1,6 +1,6 @@
 # Sweet Home POS
 
-Sistema de punto de venta para **Sweet Home — Galletas y Postres**.
+Sistema de punto de venta para **Sweet Home — Repostería**.
 
 Aplicacion web movil, offline-first, para registrar ventas diarias de forma rapida desde el celular.
 
@@ -16,11 +16,27 @@ Aplicacion web movil, offline-first, para registrar ventas diarias de forma rapi
 
 - Registro de ventas rapido en 3-4 toques
 - Descuento automatico de inventario al vender
-- Funciona sin internet (offline-first con sincronizacion)
-- Resumen diario con totales, productos mas vendidos, desglose por pago
-- Historial de ventas con filtro por fecha
+- Funciona sin internet (offline-first con sincronizacion automatica)
+- Sistema de autenticacion con roles: **admin** y **empleado**
+- Gestion de usuarios (crear, activar/desactivar empleados)
+- Gestion de productos y precios desde la app (crear, editar, desactivar)
+- Resumen diario con totales, productos mas vendidos, desglose por pago (admin)
+- Historial de ventas: admin ve todas, empleado ve solo las suyas
 - Gestion de inventario con alertas de stock bajo
 - Correo automatico con resumen diario a las 9:00 PM hora Mexico
+
+---
+
+## Roles de Usuario
+
+| Funcion | Admin | Empleado |
+|---------|-------|----------|
+| Registrar ventas | ✓ | ✓ |
+| Ver inventario | ✓ | ✓ (solo lectura) |
+| Ver historial de ventas | ✓ (todas) | ✓ (solo las propias) |
+| Resumen del dia | ✓ | — |
+| Crear/editar productos y precios | ✓ | — |
+| Gestionar usuarios | ✓ | — |
 
 ---
 
@@ -38,9 +54,11 @@ graph TD
 
     subgraph Backend["Servidor (FastAPI)"]
         API["FastAPI + Uvicorn"]
+        AUTH["JWT Auth (python-jose)"]
         ORM["SQLAlchemy Async"]
         SCH["APScheduler"]
         EMAIL["Gmail SMTP"]
+        API --> AUTH
         API --> ORM
         SCH --> EMAIL
         SCH --> ORM
@@ -50,7 +68,7 @@ graph TD
         PG["PostgreSQL (Neon)"]
     end
 
-    UI -- "POST /api/sync\n(ventas pendientes)" --> API
+    UI -- "Bearer JWT\nPOST /api/sync\n(ventas pendientes)" --> API
     API -- "productos actualizados" --> UI
     ORM --> PG
     SW -- "Cache assets + API" --> UI
@@ -61,7 +79,7 @@ graph TD
 ```
 
 **Flujo principal:**
-1. El usuario abre la PWA en su celular
+1. El usuario abre la PWA e inicia sesion con usuario + contrasena
 2. Registra ventas que se guardan localmente en IndexedDB
 3. Cuando hay internet, la app sincroniza automaticamente con el backend
 4. El backend persiste en PostgreSQL y envia correos diarios
@@ -77,7 +95,7 @@ graph LR
     end
 
     subgraph Render["Render (Gratis)"]
-        BE["Backend FastAPI\n+ Scheduler"]
+        BE["Backend FastAPI\n+ Scheduler\nPython 3.12"]
     end
 
     subgraph Neon["Neon (Gratis)"]
@@ -101,7 +119,7 @@ graph LR
 | Servicio | Uso | Limite Free |
 |----------|-----|-------------|
 | **Vercel** | Frontend estatico + PWA | 100 GB bandwidth/mes |
-| **Render** | Backend FastAPI | 750 hrs/mes, duerme tras 15 min inactivo |
+| **Render** | Backend FastAPI (Python 3.12) | 750 hrs/mes, duerme tras 15 min inactivo |
 | **Neon** | PostgreSQL | 0.5 GB storage, 100 compute-hrs/mes |
 | **cron-job.org** | Dispara email diario | Ilimitado |
 
@@ -148,6 +166,15 @@ sequenceDiagram
 
 ```mermaid
 erDiagram
+    User {
+        int id PK
+        string username
+        string password_hash
+        string role
+        bool active
+        datetime created_at
+    }
+
     Product {
         int id PK
         string name
@@ -166,6 +193,7 @@ erDiagram
         string payment_method
         datetime created_at
         datetime synced_at
+        int user_id FK
     }
 
     SaleItem {
@@ -178,9 +206,21 @@ erDiagram
         float subtotal
     }
 
+    User ||--o{ Sale : "registra"
     Product ||--o{ SaleItem : "se vende en"
     Sale ||--|{ SaleItem : "contiene"
 ```
+
+### User
+
+| Campo | Tipo | Default | Descripcion |
+|-------|------|---------|-------------|
+| id | Integer PK | auto | ID unico |
+| username | String(50) UNIQUE | requerido | Nombre de usuario |
+| password_hash | String | requerido | Contrasena hasheada con bcrypt |
+| role | String(20) | requerido | `"admin"` o `"employee"` |
+| active | Boolean | true | Si puede iniciar sesion |
+| created_at | DateTime | UTC now | Fecha de creacion |
 
 ### Product
 
@@ -202,9 +242,10 @@ erDiagram
 | id | Integer PK | auto | ID unico |
 | client_uuid | String(36) UNIQUE | requerido | UUID del cliente (deduplicacion) |
 | total | Float | requerido | Total de la venta |
-| payment_method | String(20) | requerido | "efectivo" o "transferencia" |
-| created_at | DateTime | requerido | Hora de la venta (zona Mexico) |
+| payment_method | String(20) | requerido | `"efectivo"` o `"transferencia"` |
+| created_at | DateTime | requerido | Hora de la venta (UTC, zona Mexico al mostrar) |
 | synced_at | DateTime | UTC now | Cuando se sincronizo |
+| user_id | Integer FK | nullable | Empleado que registro la venta |
 
 ### SaleItem
 
@@ -220,38 +261,12 @@ erDiagram
 
 ---
 
-## Flujo UX — Registrar Venta
-
-```mermaid
-flowchart TD
-    A["Abrir app"] --> B["Pantalla Registrar Venta"]
-    B --> C["Tap en producto\n(se agrega al carrito)"]
-    C --> D{"Mas productos?"}
-    D -- Si --> C
-    D -- No --> E["Seleccionar metodo de pago\n(Efectivo / Transferencia)"]
-    E --> F["Tap en 'Registrar $XX'"]
-    F --> G["Venta guardada en IndexedDB"]
-    G --> H{"Hay internet?"}
-    H -- Si --> I["Sync automatico al backend"]
-    H -- No --> J["Se sincroniza despues"]
-
-    style A fill:#d4845a,stroke:#333,color:#fff
-    style F fill:#4a9e4a,stroke:#333,color:#fff
-    style G fill:#4a7eb5,stroke:#333,color:#fff
-```
-
-**Minimo 3 toques:**
-1. Tap en producto (se agrega con cantidad 1)
-2. Seleccionar metodo de pago
-3. Tap en "Registrar"
-
----
-
 ## Stack Tecnologico
 
 | Componente | Tecnologia | Justificacion |
 |------------|-----------|---------------|
-| **Backend** | Python + FastAPI | Async, rapido, validacion con Pydantic |
+| **Backend** | Python 3.12 + FastAPI | Async, rapido, validacion con Pydantic |
+| **Autenticacion** | JWT (python-jose) + bcrypt (passlib) | Tokens sin estado, contrasenas seguras |
 | **Frontend** | React 18 + Vite + TypeScript | Ecosistema maduro, vite-plugin-pwa para offline |
 | **BD Produccion** | PostgreSQL (Neon) | Free tier, compatible con SQLAlchemy async |
 | **BD Local Dev** | SQLite + aiosqlite | Cero infraestructura, un archivo |
@@ -269,75 +284,72 @@ flowchart TD
 sweet_home_pos/
 ├── backend/
 │   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py                 # FastAPI app, lifespan, CORS, routers, cron endpoint
+│   │   ├── main.py                 # FastAPI app, lifespan, CORS, routers, seed admin
 │   │   ├── config.py               # Settings con pydantic-settings (.env)
 │   │   ├── database.py             # SQLAlchemy async engine (SQLite o PostgreSQL)
-│   │   ├── seed.py                 # Seed del catalogo (18 productos)
+│   │   ├── seed.py                 # Seed del catalogo de productos
 │   │   ├── models/
-│   │   │   ├── __init__.py
+│   │   │   ├── user.py             # Modelo User (auth)
 │   │   │   ├── product.py          # Modelo Product
 │   │   │   └── sale.py             # Modelos Sale + SaleItem
 │   │   ├── schemas/
-│   │   │   ├── __init__.py
-│   │   │   ├── product.py          # Schemas Pydantic de productos
+│   │   │   ├── auth.py             # LoginRequest, TokenResponse, UserCreate, UserResponse
+│   │   │   ├── product.py          # ProductCreate, ProductUpdate, ProductResponse
 │   │   │   ├── sale.py             # Schemas de ventas
 │   │   │   └── sync.py             # Schemas del payload de sincronizacion
 │   │   ├── routers/
-│   │   │   ├── __init__.py
-│   │   │   ├── products.py         # GET productos, POST crear, PUT stock
-│   │   │   ├── sales.py            # POST venta, GET historial con filtros
-│   │   │   ├── reports.py          # GET resumen diario, POST enviar correo test
+│   │   │   ├── auth.py             # POST /login, GET /me, GET/POST /users, dependencias JWT
+│   │   │   ├── products.py         # GET lista, POST crear, PUT editar, PUT stock
+│   │   │   ├── sales.py            # GET historial (filtrado por rol)
+│   │   │   ├── reports.py          # GET resumen diario (solo admin)
 │   │   │   └── sync.py             # POST sync batch de ventas offline
 │   │   └── services/
-│   │       ├── __init__.py
-│   │       ├── email_service.py    # Gmail SMTP + template HTML bonito
+│   │       ├── auth_service.py     # hash_password, verify_password, create_token, decode_token
+│   │       ├── email_service.py    # Gmail SMTP + template HTML
 │   │       ├── report_service.py   # Generacion de datos del resumen diario
 │   │       └── scheduler.py        # APScheduler cron (9PM Mexico)
-│   ├── requirements.txt
-│   ├── .env                        # Variables de entorno (NO se sube a git)
-│   └── .env.example                # Template de variables
+│   ├── .python-version             # Fija Python 3.12 en Render
+│   └── requirements.txt
 ├── frontend/
 │   ├── public/
 │   │   └── icons/
+│   │       ├── logo.png            # Logo Sweet Home (login page)
 │   │       ├── icon-192.svg        # Icono PWA 192x192
 │   │       └── icon-512.svg        # Icono PWA 512x512
 │   ├── src/
-│   │   ├── main.tsx                # Entry point React
-│   │   ├── App.tsx                 # Router + Layout con BottomNav
-│   │   ├── vite-env.d.ts           # Tipos Vite
-│   │   ├── types/
-│   │   │   └── index.ts            # Interfaces TypeScript compartidas
+│   │   ├── App.tsx                 # Router + AuthProvider + roles
+│   │   ├── contexts/
+│   │   │   └── AuthContext.tsx     # Auth state, login/logout, token en localStorage
 │   │   ├── db/
 │   │   │   ├── database.ts         # Schema Dexie.js (products, sales, saleItems)
 │   │   │   └── sync.ts             # Logica de sincronizacion con backend
 │   │   ├── hooks/
-│   │   │   ├── useOnlineStatus.ts  # Detecta online/offline + auto-sync
+│   │   │   ├── useOnlineStatus.ts  # Detecta online/offline + auto-sync (solo autenticado)
 │   │   │   └── useProducts.ts      # Hook para obtener productos
 │   │   ├── services/
-│   │   │   └── api.ts              # Fetch wrapper con VITE_API_URL
+│   │   │   └── api.ts              # Fetch wrapper con JWT + manejo 401
 │   │   ├── pages/
+│   │   │   ├── Login.tsx           # Pantalla de inicio de sesion
 │   │   │   ├── RegisterSale.tsx    # Pantalla principal: registrar venta rapido
-│   │   │   ├── Catalog.tsx         # Ver catalogo de productos
-│   │   │   ├── Inventory.tsx       # Gestionar stock, alertas de bajo inventario
-│   │   │   ├── DailySummary.tsx    # Resumen del dia
-│   │   │   └── SalesHistory.tsx    # Historial con filtro por fecha
+│   │   │   ├── Inventory.tsx       # Gestionar stock + crear/editar productos (admin)
+│   │   │   ├── SalesHistory.tsx    # "Mis Ventas" (empleado) / "Historial" (admin)
+│   │   │   ├── DailySummary.tsx    # Resumen del dia (admin)
+│   │   │   ├── Users.tsx           # Gestion de usuarios (admin)
+│   │   │   └── Catalog.tsx         # Ver catalogo de productos
 │   │   ├── components/
-│   │   │   ├── BottomNav.tsx       # Navegacion inferior (5 tabs)
+│   │   │   ├── BottomNav.tsx       # Navegacion inferior (tabs segun rol)
 │   │   │   ├── ProductGrid.tsx     # Grid de productos (touch targets grandes)
 │   │   │   ├── SyncIndicator.tsx   # Indicador de estado online/sync
-│   │   │   └── Toast.tsx           # Notificaciones
+│   │   │   └── Toast.tsx           # Notificaciones toast
 │   │   └── styles/
 │   │       ├── global.css          # Reset + variables CSS + tema
-│   │       ├── pages.css           # Estilos por pagina
+│   │       ├── pages.css           # Estilos por pagina (login, product sheet, etc.)
 │   │       └── components.css      # Estilos de componentes
-│   ├── index.html                  # HTML base con meta tags moviles
-│   ├── vite.config.ts              # Vite + PWA plugin config
-│   ├── tsconfig.json               # TypeScript config
-│   └── package.json                # Dependencias npm
-├── .env.example                    # Template de variables global
+│   ├── index.html
+│   ├── vite.config.ts
+│   └── package.json
 ├── .gitignore
-└── README.md                       # Esta documentacion
+└── README.md
 ```
 
 ---
@@ -346,41 +358,55 @@ sweet_home_pos/
 
 Base URL: `https://sweet-home-pos.onrender.com` (produccion) o `http://localhost:8000` (local)
 
+Todos los endpoints (excepto `/api/health` y `/api/auth/login`) requieren header:
+```
+Authorization: Bearer <token>
+```
+
 ### Health
 
-| Metodo | Ruta | Descripcion |
-|--------|------|-------------|
-| GET | `/api/health` | Health check. Responde `{"status": "ok"}` |
+| Metodo | Ruta | Auth | Descripcion |
+|--------|------|------|-------------|
+| GET | `/api/health` | — | Health check |
+
+### Autenticacion
+
+| Metodo | Ruta | Auth | Descripcion |
+|--------|------|------|-------------|
+| POST | `/api/auth/login` | — | Login. Body: `{"username": "", "password": ""}`. Retorna `{token, user_id, username, role}` |
+| GET | `/api/auth/me` | Usuario | Datos del usuario autenticado |
+| GET | `/api/auth/users` | Admin | Listar todos los usuarios |
+| POST | `/api/auth/users` | Admin | Crear usuario. Body: `{username, password, role}` |
+| PUT | `/api/auth/users/{id}/active` | Admin | Activar/desactivar usuario. Query: `?active=true/false` |
 
 ### Productos
 
-| Metodo | Ruta | Params | Descripcion |
-|--------|------|--------|-------------|
-| GET | `/api/products` | `?active_only=true` | Listar productos (activos por default) |
-| POST | `/api/products` | Body: ProductCreate | Crear producto nuevo |
-| PUT | `/api/products/{id}/stock` | Body: `{"stock": 10}` | Actualizar stock de un producto |
-| GET | `/api/products/low-stock` | — | Productos con stock bajo el umbral |
+| Metodo | Ruta | Auth | Descripcion |
+|--------|------|------|-------------|
+| GET | `/api/products` | Usuario | Listar productos. Query: `?active_only=true` |
+| POST | `/api/products` | Admin | Crear producto. Body: `{name, price, stock, low_stock_threshold}` |
+| PUT | `/api/products/{id}` | Admin | Editar producto. Body: `{name?, price?, low_stock_threshold?, active?}` |
+| PUT | `/api/products/{id}/stock` | Admin | Actualizar stock. Body: `{"stock": 10}` |
+| GET | `/api/products/low-stock` | Usuario | Productos con stock bajo el umbral |
 
 ### Ventas
 
-| Metodo | Ruta | Params | Descripcion |
-|--------|------|--------|-------------|
-| POST | `/api/sales` | Body: SaleCreate | Registrar venta (descuenta stock) |
-| GET | `/api/sales` | `?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&limit=50&offset=0` | Historial de ventas |
-| GET | `/api/sales/count` | `?date_from=&date_to=` | Contar ventas en rango de fechas |
-
-### Reportes
-
-| Metodo | Ruta | Params | Descripcion |
-|--------|------|--------|-------------|
-| GET | `/api/reports/daily` | `?date=YYYY-MM-DD` | Resumen del dia (hoy si no se pasa fecha) |
-| POST | `/api/reports/send-test` | — | Enviar correo de prueba con datos de hoy |
+| Metodo | Ruta | Auth | Descripcion |
+|--------|------|------|-------------|
+| GET | `/api/sales` | Usuario | Historial. Admin ve todas, empleado solo las suyas. Query: `?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&limit=50` |
 
 ### Sincronizacion
 
-| Metodo | Ruta | Descripcion |
-|--------|------|-------------|
-| POST | `/api/sync` | Enviar batch de ventas offline. Retorna UUIDs sincronizados + productos actualizados |
+| Metodo | Ruta | Auth | Descripcion |
+|--------|------|------|-------------|
+| POST | `/api/sync` | Usuario | Enviar batch de ventas offline. Retorna UUIDs sincronizados + productos actualizados |
+
+### Reportes (Admin)
+
+| Metodo | Ruta | Auth | Descripcion |
+|--------|------|------|-------------|
+| GET | `/api/reports/daily` | Admin | Resumen del dia. Query: `?date=YYYY-MM-DD` |
+| POST | `/api/reports/send-test` | Admin | Enviar correo de prueba con datos de hoy |
 
 ### Cron Externo
 
@@ -394,52 +420,32 @@ Base URL: `https://sweet-home-pos.onrender.com` (produccion) o `http://localhost
 
 ### Backend (`backend/.env`)
 
-| Variable | Tipo | Default | Descripcion |
-|----------|------|---------|-------------|
-| `DATABASE_URL` | string | `sqlite+aiosqlite:///./sweet_home.db` | URL de conexion. SQLite para local, PostgreSQL para produccion |
-| `GMAIL_USER` | string | `""` | Cuenta Gmail para enviar correos |
-| `GMAIL_APP_PASSWORD` | string | `""` | App Password de Gmail (16 caracteres) |
-| `EMAIL_RECIPIENT` | string | `""` | Email que recibe el resumen diario |
-| `TIMEZONE` | string | `America/Mexico_City` | Zona horaria para reportes |
-| `DAILY_REPORT_HOUR` | int | `21` | Hora del correo diario (9 PM) |
-| `DAILY_REPORT_MINUTE` | int | `0` | Minuto del correo diario |
-| `CORS_ORIGINS` | string | `http://localhost:5173` | URLs permitidas (separadas por coma) |
-| `CRON_SECRET` | string | `""` | Token Bearer para el endpoint de cron externo |
+| Variable | Default | Descripcion |
+|----------|---------|-------------|
+| `DATABASE_URL` | `sqlite+aiosqlite:///./sweet_home.db` | SQLite para local, `postgresql+asyncpg://...` para produccion |
+| `JWT_SECRET` | `changeme-...` | Secret para firmar tokens JWT. **Cambiar en produccion.** |
+| `JWT_EXPIRE_HOURS` | `8` | Duracion del token en horas |
+| `ADMIN_USERNAME` | `admin` | Usuario del administrador creado al iniciar |
+| `ADMIN_PASSWORD` | `""` | Contrasena del admin. Si esta vacia, no se crea el admin. |
+| `GMAIL_USER` | `""` | Cuenta Gmail para enviar correos |
+| `GMAIL_APP_PASSWORD` | `""` | App Password de Gmail (16 caracteres, sin espacios) |
+| `EMAIL_RECIPIENT` | `""` | Email que recibe el resumen diario |
+| `TIMEZONE` | `America/Mexico_City` | Zona horaria para reportes |
+| `DAILY_REPORT_HOUR` | `21` | Hora del correo diario (9 PM) |
+| `DAILY_REPORT_MINUTE` | `0` | Minuto del correo diario |
+| `CORS_ORIGINS` | `http://localhost:5173` | URLs permitidas (separadas por coma) |
+| `CRON_SECRET` | `""` | Token Bearer para el endpoint de cron externo |
+
+**Generar JWT_SECRET seguro:**
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
 
 ### Frontend (`frontend/.env`)
 
-| Variable | Tipo | Default | Descripcion |
-|----------|------|---------|-------------|
-| `VITE_API_URL` | string | `http://localhost:8000` | URL del backend |
-
----
-
-## Catalogo de Productos (Seed)
-
-18 productos sembrados automaticamente al iniciar el backend:
-
-| # | Producto | Precio (MXN) |
-|---|----------|-------------|
-| 1 | Galletas tipo New York | $45 |
-| 2 | Galletas de canela | $3 |
-| 3 | Galletas nuez | $3 |
-| 4 | Galletas de chispas de chocolate | $20 |
-| 5 | Galletas de arandano con avena | $20 |
-| 6 | Alfajores | $15 |
-| 7 | Empanadas de mermelada | $15 |
-| 8 | Empanadas de hojaldre | $25 |
-| 9 | Pan de elote | $25 |
-| 10 | Pastel de zanahoria (rebanada) | $45 |
-| 11 | Pastel de chocolate (rebanada) | $45 |
-| 12 | Pay de limon (rebanada) | $25 |
-| 13 | Pay de queso (rebanada) | $25 |
-| 14 | Flan (rebanada) | $25 |
-| 15 | Galletas decoradas (grandes) | $45 |
-| 16 | Galletas decoradas (chicas) | $30 |
-| 17 | Paquetes chicos de galletas (nuez o canela) | $50 |
-| 18 | Paquete grande de galletas (nuez o canela) | $75 |
-
-Todos inician con `stock=0` y `low_stock_threshold=5`. El stock se ajusta manualmente desde la pantalla de Inventario.
+| Variable | Default | Descripcion |
+|----------|---------|-------------|
+| `VITE_API_URL` | `http://localhost:8000` | URL del backend |
 
 ---
 
@@ -447,10 +453,9 @@ Todos inician con `stock=0` y `low_stock_threshold=5`. El stock se ajusta manual
 
 ### Requisitos
 
-- Python 3.11+
+- Python 3.12
 - Node.js 18+
 - npm 9+
-- Git
 
 ### 1. Clonar el repositorio
 
@@ -464,7 +469,7 @@ cd sweet_home_pos
 ```bash
 cd backend
 
-# Crear entorno virtual
+# Crear entorno virtual con Python 3.12
 python -m venv venv
 
 # Activar (Windows PowerShell)
@@ -480,7 +485,10 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Editar `backend/.env` con tus datos (para desarrollo local solo necesitas los defaults).
+Editar `backend/.env` — para desarrollo local lo minimo es poner `ADMIN_PASSWORD`:
+```
+ADMIN_PASSWORD=tupassword
+```
 
 ### 3. Frontend
 
@@ -491,12 +499,9 @@ npm install
 
 ### 4. Ejecutar
 
-Necesitas **dos terminales**:
-
 **Terminal 1 — Backend:**
 ```bash
 cd backend
-# Activar venv si no esta activo
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -506,213 +511,121 @@ cd frontend
 npm run dev
 ```
 
-### 5. Abrir la app
+### 5. Acceder
 
-- **Navegador:** http://localhost:5173
+- **App:** http://localhost:5173 → login con usuario `admin` y la contrasena que pusiste en `.env`
 - **API Docs:** http://localhost:8000/docs
-- **Modo movil:** En Chrome DevTools (F12) activar modo responsive
-
-### 6. Acceder desde celular (misma red WiFi)
-
-1. Busca la IP de tu computadora (ej: `192.168.1.100`)
-2. En `backend/.env`: `CORS_ORIGINS=http://192.168.1.100:5173`
-3. En `frontend/.env`: `VITE_API_URL=http://192.168.1.100:8000`
-4. Reinicia ambos servicios
-5. Abre `http://192.168.1.100:5173` en el celular
 
 ---
 
 ## Setup Produccion (Deploy Gratuito)
 
-Guia paso a paso para desplegar en servicios 100% gratuitos. Ningun servicio pide tarjeta de credito.
-
 ### Paso 1: Neon PostgreSQL (Base de datos)
 
-1. Ve a **https://neon.tech** y crea cuenta
-2. Crea un nuevo proyecto llamado `sweet-home-pos`
-3. Haz clic en **Connect** (boton azul arriba a la derecha)
-4. **Desactiva "Connection pooling"** (toggle verde)
-5. En el dropdown de la izquierda selecciona **SQLAlchemy** (o copia el string directo)
-6. Copia el connection string, se ve asi:
+1. Crea cuenta en **https://neon.tech**
+2. Nuevo proyecto → conectar → copia el connection string
+3. Convierte al formato asyncpg:
    ```
-   postgresql://neondb_owner:tu_password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+   postgresql+asyncpg://usuario:password@host/db?ssl=require
    ```
-7. Convierte al formato asyncpg:
-   - Cambia `postgresql://` por `postgresql+asyncpg://`
-   - Cambia `sslmode=require` por `ssl=require`
-   - Elimina `&channel_binding=require` si aparece
-
-   Resultado:
-   ```
-   postgresql+asyncpg://neondb_owner:tu_password@ep-xxx.region.aws.neon.tech/neondb?ssl=require
-   ```
-8. Guarda este string, lo necesitas en el siguiente paso
 
 ### Paso 2: Render.com (Backend)
 
-1. Ve a **https://render.com** y crea cuenta (conecta tu GitHub)
-2. Click **New** → **Web Service**
-3. Selecciona el repositorio `sweet_home_pos`
-4. Configura:
+1. Crea cuenta en **https://render.com** → conecta GitHub
+2. **New → Web Service** → selecciona el repo
 
    | Campo | Valor |
    |-------|-------|
-   | Name | `sweet-home-pos-api` (o el que quieras) |
-   | Language | Python 3 |
-   | Branch | main |
    | Root Directory | `backend` |
    | Build Command | `pip install -r requirements.txt` |
    | Start Command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-   | Instance Type | **Free** |
+   | Instance Type | Free |
 
-5. En la seccion **Environment Variables**, agrega:
+3. Variables de entorno en Render:
 
    | Key | Value |
    |-----|-------|
-   | `DATABASE_URL` | (tu URL de Neon del paso 1) |
-   | `GMAIL_USER` | `galletasweethome@gmail.com` |
-   | `GMAIL_APP_PASSWORD` | (tu app password, o dejalo vacio por ahora) |
-   | `EMAIL_RECIPIENT` | `galletasweethome@gmail.com` |
-   | `TIMEZONE` | `America/Mexico_City` |
-   | `CORS_ORIGINS` | `http://localhost:5173` (se actualiza en el paso 4) |
-   | `CRON_SECRET` | (inventa un string largo aleatorio) |
+   | `DATABASE_URL` | URL de Neon |
+   | `JWT_SECRET` | string aleatorio largo (genera con python secrets) |
+   | `ADMIN_USERNAME` | `admin` |
+   | `ADMIN_PASSWORD` | tu contrasena segura |
+   | `GMAIL_USER` | tu correo Gmail |
+   | `GMAIL_APP_PASSWORD` | app password de Gmail |
+   | `EMAIL_RECIPIENT` | correo que recibe el reporte |
+   | `CORS_ORIGINS` | URL de Vercel (se agrega en paso 4) |
+   | `CRON_SECRET` | string aleatorio para el cron |
 
-6. Click **Deploy**
-7. Espera a que el status cambie a **Live** (~2-3 min)
-8. Verifica: abre `https://tu-servicio.onrender.com/api/health`
-   - Debe responder: `{"status": "ok", "app": "Sweet Home POS"}`
+4. Deploy → verifica: `https://tu-api.onrender.com/api/health`
 
 ### Paso 3: Vercel (Frontend)
 
-1. Ve a **https://vercel.com** y crea cuenta (conecta tu GitHub)
-2. Click **Add New** → **Project**
-3. Selecciona el repositorio `sweet_home_pos` → **Import**
-4. Configura:
-
-   | Campo | Valor |
-   |-------|-------|
-   | Root Directory | `frontend` |
-   | Framework Preset | Vite (auto-detectado) |
-
-5. En **Environment Variables**:
-
-   | Key | Value |
-   |-----|-------|
-   | `VITE_API_URL` | `https://tu-servicio.onrender.com` (la URL de Render) |
-
-6. Click **Deploy**
-7. Espera a que termine (~1-2 min)
-8. Anota la URL que te da Vercel (ej: `https://sweet-home-pos.vercel.app`)
+1. Crea cuenta en **https://vercel.com** → conecta GitHub
+2. **Add New → Project** → importa el repo
+3. Root Directory: `frontend`
+4. Variable de entorno: `VITE_API_URL = https://tu-api.onrender.com`
+5. Deploy
 
 ### Paso 4: Conectar CORS
 
-1. Ve a **Render** → tu servicio → **Environment**
-2. Edita `CORS_ORIGINS` y pon la URL de Vercel:
-   ```
-   https://sweet-home-pos.vercel.app
-   ```
-3. Render re-deploya automaticamente
-4. Ahora abre la URL de Vercel → los productos deben cargar
-
-> **Nota:** Si dice "No hay productos", puede ser que Render este dormido. Abre primero `https://tu-servicio.onrender.com/api/health` en otra pestaña, espera ~30-50 seg a que responda, y luego recarga la app.
+En Render → Environment → `CORS_ORIGINS = https://tu-app.vercel.app`
 
 ### Paso 5: cron-job.org (Correo diario)
 
-1. Ve a **https://cron-job.org** y crea cuenta gratuita
-2. Crea un nuevo cron job:
-
-   | Campo | Valor |
-   |-------|-------|
-   | Title | `Sweet Home Daily Report` |
-   | URL | `https://tu-servicio.onrender.com/api/cron/daily-report` |
-   | Request Method | POST |
-   | Schedule | Custom: timezone `America/Mexico_City`, hora `21:00` |
-   | Request Header | `Authorization: Bearer TU_CRON_SECRET` |
-   | Request Timeout | 60 segundos |
-
-3. Activa el cron job
-
----
-
-## Configurar Gmail App Password
-
-Para que el correo diario funcione, necesitas una App Password de Gmail:
-
-1. Ve a https://myaccount.google.com/security
-2. Activa **Verificacion en 2 pasos** si no esta activa
-3. Ve a https://myaccount.google.com/apppasswords
-4. En "Selecciona la app", elige **Correo**
-5. En "Selecciona el dispositivo", elige **Otro** → escribe "Sweet Home POS"
-6. Click **Generar**
-7. Copia la contrasena de 16 caracteres (sin espacios)
-8. En **Render** → Environment → agrega/actualiza `GMAIL_APP_PASSWORD` con ese valor
-
-Para probar que funcione:
-```bash
-curl -X POST https://tu-servicio.onrender.com/api/reports/send-test
-```
+1. Crea cuenta en **https://cron-job.org**
+2. Nuevo cron job:
+   - URL: `https://tu-api.onrender.com/api/cron/daily-report`
+   - Metodo: POST
+   - Schedule: 21:00 `America/Mexico_City`
+   - Header: `Authorization: Bearer TU_CRON_SECRET`
 
 ---
 
 ## Como Usar la App
 
+### Iniciar sesion
+1. Abre la app → pantalla de login
+2. Ingresa usuario y contrasena
+3. El admin ve todas las secciones; el empleado ve Venta, Inventario y Mis Ventas
+4. Para cerrar sesion: ir a "Mis Ventas" (o "Historial") → boton "Cerrar sesion"
+
 ### Registrar una venta
-1. Abre la app (pantalla "Venta" es la principal)
+1. Pantalla "Venta" (principal)
 2. Toca un producto para agregarlo al carrito
 3. Toca de nuevo para aumentar cantidad (o usa +/-)
 4. Selecciona metodo de pago (Efectivo o Transferencia)
 5. Toca "Registrar $XX"
 
-### Gestionar inventario
-1. Ve a la pantalla "Inventario"
-2. Edita el stock de cada producto
-3. Los productos con stock en 0 aparecen como "Agotado" y no se pueden vender
+### Gestionar productos (admin)
+1. Ve a "Inventario"
+2. **Nuevo producto:** boton "+ Nuevo" arriba a la derecha
+3. **Editar producto:** icono de lapiz en cada fila → cambia nombre, precio, umbral o desactivalo
+4. Ajusta stock con los botones +/- o editando el numero directamente
 
-### Ver resumen del dia
-1. Ve a la pantalla "Resumen"
-2. Muestra: total vendido, numero de ventas, top productos, desglose por pago
+### Ver resumen del dia (admin)
+- Pantalla "Resumen" → total vendido, numero de ventas, top productos, desglose por metodo de pago
 
 ### Ver historial
-1. Ve a la pantalla "Historial"
-2. Filtra por rango de fechas
-3. Toca una venta para ver el detalle
+- Empleado: "Mis Ventas" → solo sus propias ventas
+- Admin: "Historial" → todas las ventas, filtrables por fecha
+
+### Gestionar usuarios (admin)
+1. Pantalla "Usuarios"
+2. Crear empleado con usuario + contrasena
+3. Activar/desactivar empleados existentes
 
 ### Instalar como app (PWA)
-- **Android (Chrome):** Menu (3 puntos) → "Agregar a pantalla de inicio"
+- **Android (Chrome):** Menu → "Agregar a pantalla de inicio"
 - **iPhone (Safari):** Boton compartir → "Agregar a inicio"
 
 ---
 
-## Preguntas Frecuentes
+## Proximos Pasos
 
-### El backend esta dormido, afecta mi uso?
-No. La app es offline-first. Registras ventas instantaneamente y se sincronizan cuando el backend despierte (~30-50 seg). No necesitas hacer nada manual.
-
-### Puedo usar la app sin internet?
-Si. Las ventas se guardan localmente. Cuando vuelva la conexion, se sincronizan automaticamente.
-
-### Como evito ventas duplicadas?
-Cada venta tiene un UUID unico. Si la app intenta sincronizar la misma venta dos veces, el servidor la ignora.
-
-### El servicio me va a cobrar?
-No. Todos los servicios (Vercel, Render, Neon, cron-job.org) tienen free tier permanente sin tarjeta de credito. Si llegas al limite, dejan de funcionar pero no cobran.
-
-### Como agrego un producto nuevo?
-Por ahora via API: `POST /api/products` con el nombre, precio y stock. En una v2 se puede agregar desde la app.
-
-### Como cambio un precio?
-Actualmente los precios se definen en el seed. Para v2 se planea edicion desde la app. Mientras tanto se puede hacer via API o directamente en la base de datos.
-
----
-
-## Proximos Pasos (v2)
-
-- Autenticacion con PIN simple
-- Edicion de precios y productos desde la app
-- Graficas de ventas (semana/mes)
-- Alembic para migraciones de BD
+- Sistema de descuentos (porcentaje o monto fijo por venta)
+- Reportes semanales y mensuales
 - Categorias de productos
-- Notas por venta
+- Exportacion a CSV/Excel de ventas e inventario
 - Cancelacion/devolucion de ventas
+- Cambio de contrasena desde la app
+- Alembic para migraciones de BD formales
 - Backup automatico de BD
-- Docker Compose para deploy en VPS propio
