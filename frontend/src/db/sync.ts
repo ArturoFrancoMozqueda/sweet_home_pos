@@ -1,5 +1,35 @@
-import { db } from "./database";
+import { db, type DBProduct } from "./database";
 import { api } from "../services/api";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+async function fetchImageAsBase64(url: string): Promise<string | undefined> {
+  try {
+    const fullUrl = url.startsWith("http") ? url : `${API_URL}${url}`;
+    const res = await fetch(fullUrl);
+    if (!res.ok) return undefined;
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(undefined);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+async function cacheProductImages(products: DBProduct[]): Promise<void> {
+  for (const product of products) {
+    if (product.image_url && !product.image_data) {
+      const base64 = await fetchImageAsBase64(product.image_url);
+      if (base64) {
+        await db.products.update(product.id, { image_data: base64 });
+      }
+    }
+  }
+}
 
 export async function syncToServer(): Promise<boolean> {
   try {
@@ -45,22 +75,33 @@ export async function syncToServer(): Promise<boolean> {
       });
     }
 
-    // Update products from server
+    // Update products from server — preserve local image_data
     if (response.products) {
+      const existingProducts = await db.products.toArray();
+      const imageDataMap = new Map(
+        existingProducts
+          .filter((p) => p.image_data)
+          .map((p) => [p.id, p.image_data])
+      );
+
+      const updatedProducts: DBProduct[] = response.products.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        stock: p.stock,
+        low_stock_threshold: p.low_stock_threshold,
+        active: p.active,
+        image_url: p.image_url,
+        image_data: imageDataMap.get(p.id),
+      }));
+
       await db.transaction("rw", db.products, async () => {
         await db.products.clear();
-        await db.products.bulkPut(
-          response.products.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            price: p.price,
-            stock: p.stock,
-            low_stock_threshold: p.low_stock_threshold,
-            active: p.active,
-            image_url: p.image_url,
-          }))
-        );
+        await db.products.bulkPut(updatedProducts);
       });
+
+      // Download images for products that have image_url but no local cache
+      cacheProductImages(updatedProducts).catch(() => {});
     }
 
     return true;
@@ -74,20 +115,30 @@ export async function refreshProducts(): Promise<boolean> {
   try {
     const products = await api.get("/api/products");
     if (Array.isArray(products)) {
+      const existingProducts = await db.products.toArray();
+      const imageDataMap = new Map(
+        existingProducts
+          .filter((p) => p.image_data)
+          .map((p) => [p.id, p.image_data])
+      );
+
+      const updatedProducts: DBProduct[] = products.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        stock: p.stock,
+        low_stock_threshold: p.low_stock_threshold,
+        active: p.active,
+        image_url: p.image_url,
+        image_data: imageDataMap.get(p.id),
+      }));
+
       await db.transaction("rw", db.products, async () => {
         await db.products.clear();
-        await db.products.bulkPut(
-          products.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            price: p.price,
-            stock: p.stock,
-            low_stock_threshold: p.low_stock_threshold,
-            active: p.active,
-            image_url: p.image_url,
-          }))
-        );
+        await db.products.bulkPut(updatedProducts);
       });
+
+      cacheProductImages(updatedProducts).catch(() => {});
     }
     return true;
   } catch {

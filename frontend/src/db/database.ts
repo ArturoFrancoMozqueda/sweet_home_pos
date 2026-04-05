@@ -8,6 +8,7 @@ export interface DBProduct {
   low_stock_threshold: number;
   active: boolean;
   image_url?: string;
+  image_data?: string; // base64 data URL for offline display
 }
 
 export interface DBSaleItem {
@@ -50,6 +51,12 @@ class SweetHomeDB extends Dexie {
     });
     // Version 3: image_url on products (no index needed)
     this.version(3).stores({
+      products: "id, name, active",
+      sales: "++id, client_uuid, created_at, synced, user_id",
+      saleItems: "++id, sale_uuid, product_id",
+    });
+    // Version 4: image_data for offline images (no index needed)
+    this.version(4).stores({
       products: "id, name, active",
       sales: "++id, client_uuid, created_at, synced, user_id",
       saleItems: "++id, sale_uuid, product_id",

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { DBProduct } from "../db/database";
 import type { CartItem } from "../types";
 
@@ -9,6 +10,53 @@ interface Props {
   onAddToCart: (product: DBProduct) => void;
 }
 
+function ProductCard({
+  product,
+  qty,
+  outOfStock,
+  onAddToCart,
+}: {
+  product: DBProduct;
+  qty: number;
+  outOfStock: boolean;
+  onAddToCart: () => void;
+}) {
+  const [imgError, setImgError] = useState(false);
+
+  const imgSrc = product.image_data
+    || (product.image_url
+      ? (product.image_url.startsWith("http") ? product.image_url : `${API_URL}${product.image_url}`)
+      : null);
+
+  const showPlaceholder = !imgSrc || imgError;
+
+  return (
+    <button
+      className={`product-card ${qty > 0 ? "in-cart" : ""} ${outOfStock ? "out-of-stock" : ""}`}
+      onClick={onAddToCart}
+      disabled={outOfStock}
+    >
+      {qty > 0 && <span className="cart-badge">{qty}</span>}
+      <div className="product-img-wrapper">
+        {showPlaceholder ? (
+          <div className="product-img-placeholder">🍪</div>
+        ) : (
+          <img
+            src={imgSrc}
+            alt=""
+            className="product-img"
+            loading="lazy"
+            onError={() => setImgError(true)}
+          />
+        )}
+      </div>
+      <span className="product-name">{product.name}</span>
+      <span className="product-price">${product.price}</span>
+      {outOfStock && <span className="product-out-label">Agotado</span>}
+    </button>
+  );
+}
+
 export function ProductGrid({ products, cart, onAddToCart }: Props) {
   const getCartQty = (productId: number) => {
     const item = cart.find((c) => c.product.id === productId);
@@ -17,35 +65,15 @@ export function ProductGrid({ products, cart, onAddToCart }: Props) {
 
   return (
     <div className="product-grid">
-      {products.map((product) => {
-        const qty = getCartQty(product.id);
-        const outOfStock = product.stock <= 0;
-        return (
-          <button
-            key={product.id}
-            className={`product-card ${qty > 0 ? "in-cart" : ""} ${outOfStock ? "out-of-stock" : ""}`}
-            onClick={() => onAddToCart(product)}
-            disabled={outOfStock}
-          >
-            {qty > 0 && <span className="cart-badge">{qty}</span>}
-            <div className="product-img-wrapper">
-              {product.image_url ? (
-                <img
-                  src={product.image_url.startsWith("http") ? product.image_url : `${API_URL}${product.image_url}`}
-                  alt={product.name}
-                  className="product-img"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="product-img-placeholder">🍪</div>
-              )}
-            </div>
-            <span className="product-name">{product.name}</span>
-            <span className="product-price">${product.price}</span>
-            {outOfStock && <span className="product-out-label">Agotado</span>}
-          </button>
-        );
-      })}
+      {products.map((product) => (
+        <ProductCard
+          key={product.id}
+          product={product}
+          qty={getCartQty(product.id)}
+          outOfStock={product.stock <= 0}
+          onAddToCart={() => onAddToCart(product)}
+        />
+      ))}
     </div>
   );
 }

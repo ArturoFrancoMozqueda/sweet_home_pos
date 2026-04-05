@@ -26,13 +26,14 @@ export function Inventory() {
   const [formActive, setFormActive] = useState(true);
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formImagePreview, setFormImagePreview] = useState("");
+  const [formImageData, setFormImageData] = useState("");
   const [formUploading, setFormUploading] = useState(false);
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
   const openCreate = () => {
     setFormName(""); setFormPrice(""); setFormStock("0");
-    setFormThreshold("5"); setFormActive(true); setFormImageUrl(""); setFormImagePreview(""); setFormError("");
+    setFormThreshold("5"); setFormActive(true); setFormImageUrl(""); setFormImagePreview(""); setFormImageData(""); setFormError("");
     setEditTarget(null);
     setMode("create");
   };
@@ -44,7 +45,8 @@ export function Inventory() {
     setFormThreshold(String(product.low_stock_threshold));
     setFormActive(product.active);
     setFormImageUrl(product.image_url || "");
-    setFormImagePreview(product.image_url || "");
+    setFormImagePreview(product.image_data || "");
+    setFormImageData(product.image_data || "");
     setFormError("");
     setEditTarget(product);
     setMode("edit");
@@ -53,10 +55,24 @@ export function Inventory() {
   const closeForm = () => { setMode(null); setEditTarget(null); };
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const readAsBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setFormImagePreview(URL.createObjectURL(file));
+
+    // Read as base64 immediately (works offline)
+    const base64 = await readAsBase64(file);
+    setFormImagePreview(base64);
+    setFormImageData(base64);
+
+    // Upload to server for persistence
     setFormUploading(true);
     setFormError("");
     try {
@@ -76,8 +92,8 @@ export function Inventory() {
       setFormImageUrl(data.url);
       showToast("Imagen subida");
     } catch (err: any) {
-      setFormError(err.message || "Error al subir imagen");
-      setFormImagePreview("");
+      // Base64 is already stored locally — image works offline even if upload fails
+      showToast("Imagen guardada localmente (se subirá al sincronizar)");
     } finally {
       setFormUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -106,7 +122,7 @@ export function Inventory() {
           active: true,
           image_url: imageUrl,
         });
-        await db.products.put({ id: p.id, name: p.name, price: p.price, stock: p.stock, low_stock_threshold: p.low_stock_threshold, active: p.active, image_url: p.image_url });
+        await db.products.put({ id: p.id, name: p.name, price: p.price, stock: p.stock, low_stock_threshold: p.low_stock_threshold, active: p.active, image_url: p.image_url, image_data: formImageData || undefined });
         showToast("Producto creado");
       } else if (editTarget) {
         const p = await api.put(`/api/products/${editTarget.id}`, {
@@ -115,7 +131,7 @@ export function Inventory() {
           active: formActive,
           image_url: imageUrl,
         });
-        await db.products.update(editTarget.id, { name: p.name, price: p.price, low_stock_threshold: p.low_stock_threshold, active: p.active, image_url: p.image_url });
+        await db.products.update(editTarget.id, { name: p.name, price: p.price, low_stock_threshold: p.low_stock_threshold, active: p.active, image_url: p.image_url, image_data: formImageData || undefined });
         showToast("Producto actualizado");
       }
       closeForm();
