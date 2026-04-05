@@ -139,7 +139,7 @@ export function DailySummary() {
   if (loading) {
     return (
       <div className="page">
-        <h1 className="page-title">Resumen del Dia</h1>
+        <h1 className="page-title">Resumen del Día</h1>
         <div className="empty-state"><p>Cargando...</p></div>
       </div>
     );
@@ -148,7 +148,7 @@ export function DailySummary() {
   if (!report) {
     return (
       <div className="page">
-        <h1 className="page-title">Resumen del Dia</h1>
+        <h1 className="page-title">Resumen del Día</h1>
         <div className="empty-state">
           <p style={{ fontSize: "2rem" }}>📊</p>
           <p>No hay datos disponibles.</p>
@@ -159,7 +159,7 @@ export function DailySummary() {
 
   return (
     <div className="page">
-      <h1 className="page-title">Resumen del Dia</h1>
+      <h1 className="page-title">Resumen del Día</h1>
 
       <div className="summary-hero">
         <div className="summary-label">Total Vendido</div>
@@ -177,7 +177,7 @@ export function DailySummary() {
         <>
           {report.top_products.length > 0 && (
             <div className="summary-section">
-              <h3 className="summary-section-title">Mas Vendidos</h3>
+              <h3 className="summary-section-title">Más Vendidos</h3>
               <div className="card" style={{ padding: "4px 16px" }}>
                 {report.top_products.map((p, i) => (
                   <div key={i} className="summary-row">

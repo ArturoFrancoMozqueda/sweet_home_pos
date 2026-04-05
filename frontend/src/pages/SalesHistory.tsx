@@ -147,7 +147,7 @@ export function SalesHistory() {
                     {formatDate(sale.created_at)} — {formatTime(sale.created_at)}
                   </div>
                   <div className="history-sale-method">
-                    {sale.payment_method === "efectivo" ? "💵 Efectivo" : "📱 Transferencia"}
+                    {sale.payment_method === "efectivo" ? "Efectivo" : "Transferencia"}
                     {" · "}
                     <span className="sale-synced yes">✓ Sincronizada</span>
                   </div>
@@ -178,7 +178,7 @@ export function SalesHistory() {
                       {formatDate(sale.created_at)} — {formatTime(sale.created_at)}
                     </div>
                     <div className="history-sale-method">
-                      {sale.payment_method === "efectivo" ? "💵 Efectivo" : "📱 Transferencia"}
+                      {sale.payment_method === "efectivo" ? "Efectivo" : "Transferencia"}
                       {" · "}
                       <span className="sale-synced no">⏳ Pendiente</span>
                     </div>
