@@ -111,7 +111,7 @@ async def get_sales_count(
     db: AsyncSession = Depends(get_db),
 ):
     tz = ZoneInfo(settings.timezone)
-    query = select(func.count(Sale.id))
+    query = select(func.count(Sale.id)).where(Sale.cancelled == False)  # noqa: E712
 
     if current_user.role == "employee":
         query = query.where(Sale.user_id == current_user.id)
