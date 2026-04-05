@@ -10,6 +10,7 @@ class ProductBase(BaseModel):
     stock: int = 0
     low_stock_threshold: int = 5
     active: bool = True
+    image_url: Optional[str] = None
 
 
 class ProductCreate(ProductBase):
@@ -21,6 +22,7 @@ class ProductUpdate(BaseModel):
     price: Optional[float] = None
     low_stock_threshold: Optional[int] = None
     active: Optional[bool] = None
+    image_url: Optional[str] = None
 
 
 class ProductResponse(ProductBase):

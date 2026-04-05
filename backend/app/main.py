@@ -57,6 +57,14 @@ async def _migrate_cancelled():
         ))
 
 
+async def _migrate_image_url():
+    """Idempotent migration: add image_url column to products if missing."""
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            "ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url VARCHAR(500)"
+        ))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -64,6 +72,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     await _migrate_user_id()
     await _migrate_cancelled()
+    await _migrate_image_url()
     async with async_session() as db:
         await seed_products(db)
     await _seed_admin()
