@@ -11,6 +11,7 @@ export function RegisterSale() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<"efectivo" | "transferencia" | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const { showToast } = useToast();
   const { user } = useAuth();
 
@@ -20,12 +21,18 @@ export function RegisterSale() {
     setCart((prev) => {
       const existing = prev.find((c) => c.product.id === product.id);
       if (existing) {
-        if (existing.quantity >= product.stock) return prev;
+        if (existing.quantity >= product.stock) {
+          showToast("Sin stock suficiente");
+          return prev;
+        }
         return prev.map((c) =>
           c.product.id === product.id ? { ...c, quantity: c.quantity + 1 } : c
         );
       }
-      if (product.stock <= 0) return prev;
+      if (product.stock <= 0) {
+        showToast("Sin stock suficiente");
+        return prev;
+      }
       return [...prev, { product: product as any, quantity: 1 }];
     });
   };
@@ -37,7 +44,10 @@ export function RegisterSale() {
           if (c.product.id !== productId) return c;
           const newQty = c.quantity + delta;
           if (newQty <= 0) return null;
-          if (newQty > c.product.stock) return c;
+          if (newQty > c.product.stock) {
+            showToast("Sin stock suficiente");
+            return c;
+          }
           return { ...c, quantity: newQty };
         })
         .filter(Boolean) as CartItem[]
@@ -118,13 +128,33 @@ export function RegisterSale() {
             {/* Cart header */}
             <div className="cart-header">
               <span>Carrito ({cart.length})</span>
-              <button
-                className="btn btn-secondary"
-                style={{ padding: "6px 12px", fontSize: "0.8rem", minHeight: "auto" }}
-                onClick={() => setCart([])}
-              >
-                Limpiar
-              </button>
+              {confirmClear ? (
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: "0.8rem", color: "var(--danger, #dc2626)" }}>¿Limpiar?</span>
+                  <button
+                    className="btn btn-danger"
+                    style={{ padding: "4px 10px", fontSize: "0.8rem", minHeight: "auto" }}
+                    onClick={() => { setCart([]); setConfirmClear(false); }}
+                  >
+                    Sí
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ padding: "4px 10px", fontSize: "0.8rem", minHeight: "auto" }}
+                    onClick={() => setConfirmClear(false)}
+                  >
+                    No
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: "6px 12px", fontSize: "0.8rem", minHeight: "auto" }}
+                  onClick={() => setConfirmClear(true)}
+                >
+                  Limpiar
+                </button>
+              )}
             </div>
 
             {/* Cart items — capped height, scrollable */}
