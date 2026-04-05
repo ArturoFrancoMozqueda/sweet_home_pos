@@ -1,9 +1,12 @@
-import { useState, type FormEvent } from "react";
+import { useState, useRef, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type DBProduct } from "../db/database";
 import { api } from "../services/api";
+import { getStoredToken } from "../contexts/AuthContext";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../contexts/AuthContext";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 type FormMode = "create" | "edit" | null;
 
@@ -22,12 +25,14 @@ export function Inventory() {
   const [formThreshold, setFormThreshold] = useState("5");
   const [formActive, setFormActive] = useState(true);
   const [formImageUrl, setFormImageUrl] = useState("");
+  const [formImagePreview, setFormImagePreview] = useState("");
+  const [formUploading, setFormUploading] = useState(false);
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
   const openCreate = () => {
     setFormName(""); setFormPrice(""); setFormStock("0");
-    setFormThreshold("5"); setFormActive(true); setFormImageUrl(""); setFormError("");
+    setFormThreshold("5"); setFormActive(true); setFormImageUrl(""); setFormImagePreview(""); setFormError("");
     setEditTarget(null);
     setMode("create");
   };
@@ -39,12 +44,45 @@ export function Inventory() {
     setFormThreshold(String(product.low_stock_threshold));
     setFormActive(product.active);
     setFormImageUrl(product.image_url || "");
+    setFormImagePreview(product.image_url || "");
     setFormError("");
     setEditTarget(product);
     setMode("edit");
   };
 
   const closeForm = () => { setMode(null); setEditTarget(null); };
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFormImagePreview(URL.createObjectURL(file));
+    setFormUploading(true);
+    setFormError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const token = getStoredToken();
+      const res = await fetch(`${API_URL}/api/products/upload-image`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.detail || "Error al subir imagen");
+      }
+      const data = await res.json();
+      setFormImageUrl(data.url);
+      showToast("Imagen subida");
+    } catch (err: any) {
+      setFormError(err.message || "Error al subir imagen");
+      setFormImagePreview("");
+    } finally {
+      setFormUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -279,14 +317,25 @@ export function Inventory() {
                   </div>
                 )}
                 <div className="login-field">
-                  <label>Imagen (URL)</label>
+                  <label>Imagen</label>
+                  {(formImagePreview || formImageUrl) && (
+                    <div style={{ marginBottom: 8, textAlign: "center" }}>
+                      <img
+                        src={formImagePreview || `${API_URL}${formImageUrl}`}
+                        alt="Vista previa"
+                        style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 12, border: "2px solid var(--border)" }}
+                      />
+                    </div>
+                  )}
                   <input
-                    type="url"
-                    value={formImageUrl}
-                    onChange={(e) => setFormImageUrl(e.target.value)}
-                    placeholder="https://ejemplo.com/imagen.jpg"
-                    disabled={formSaving}
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={handleImageUpload}
+                    disabled={formSaving || formUploading}
+                    style={{ fontSize: "0.85rem" }}
                   />
+                  {formUploading && <p style={{ fontSize: "0.8rem", color: "var(--text-light)", marginTop: 4 }}>Subiendo imagen...</p>}
                 </div>
                 <div className="login-field">
                   <label>Alerta stock bajo (cantidad)</label>

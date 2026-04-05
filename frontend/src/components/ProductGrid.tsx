@@ -1,6 +1,8 @@
 import type { DBProduct } from "../db/database";
 import type { CartItem } from "../types";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 interface Props {
   products: DBProduct[];
   cart: CartItem[];
@@ -29,7 +31,7 @@ export function ProductGrid({ products, cart, onAddToCart }: Props) {
             <div className="product-img-wrapper">
               {product.image_url ? (
                 <img
-                  src={product.image_url}
+                  src={product.image_url.startsWith("http") ? product.image_url : `${API_URL}${product.image_url}`}
                   alt={product.name}
                   className="product-img"
                   loading="lazy"
