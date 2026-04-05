@@ -3,6 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db, type DBSaleItem } from "../db/database";
 import { api } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
+import { useToast } from "../components/Toast";
 
 function toUtcDate(dateStr: string): Date {
   // Server returns naive strings (no Z) — treat them as UTC
@@ -32,11 +33,14 @@ interface ServerSale {
 
 export function SalesHistory() {
   const { user, logout } = useAuth();
+  const { showToast } = useToast();
   const [dateFilter, setDateFilter] = useState(() => {
     return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
   });
   const [serverSales, setServerSales] = useState<ServerSale[]>([]);
   const [loading, setLoading] = useState(false);
+  const [confirmCancelId, setConfirmCancelId] = useState<number | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   // Fetch from server when online and date changes
   useEffect(() => {
@@ -74,6 +78,20 @@ export function SalesHistory() {
     }
     return map;
   }, [localPending], new Map<string, DBSaleItem[]>());
+
+  const handleCancel = async (saleId: number) => {
+    setCancelling(true);
+    try {
+      await api.delete(`/api/sales/${saleId}`);
+      setServerSales((prev) => prev.filter((s) => s.id !== saleId));
+      setConfirmCancelId(null);
+      showToast("Venta anulada");
+    } catch {
+      showToast("Error al anular la venta");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   // Merge: server sales + local unsynced (avoid duplicates by uuid)
   const serverUuids = new Set(serverSales.map((s) => s.client_uuid));
@@ -152,7 +170,45 @@ export function SalesHistory() {
                     <span className="sale-synced yes">✓ Sincronizada</span>
                   </div>
                 </div>
-                <span className="history-sale-total">${sale.total}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {user?.role === "admin" && (
+                    confirmCancelId === sale.id ? (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <span style={{ fontSize: "0.8rem", color: "var(--danger, #dc2626)" }}>¿Anular?</span>
+                        <button
+                          className="btn btn-danger"
+                          style={{ padding: "4px 10px", fontSize: "0.8rem", minHeight: "auto" }}
+                          onClick={() => handleCancel(sale.id)}
+                          disabled={cancelling}
+                        >
+                          Sí
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: "4px 10px", fontSize: "0.8rem", minHeight: "auto" }}
+                          onClick={() => setConfirmCancelId(null)}
+                          disabled={cancelling}
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmCancelId(sale.id)}
+                        aria-label="Anular venta"
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-light)", padding: "4px" }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                          <path d="M10 11v6M14 11v6" />
+                          <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+                        </svg>
+                      </button>
+                    )
+                  )}
+                  <span className="history-sale-total">${sale.total}</span>
+                </div>
               </div>
               {sale.items.length > 0 && (
                 <div className="history-sale-items">

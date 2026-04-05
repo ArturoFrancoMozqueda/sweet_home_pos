@@ -15,7 +15,7 @@ from app.database import get_db
 from app.models.product import Product
 from app.models.sale import Sale, SaleItem
 from app.models.user import User
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, require_admin
 from app.schemas.sale import SaleCreate, SaleResponse
 
 router = APIRouter(prefix="/api/sales", tags=["sales"])
@@ -71,6 +71,7 @@ async def get_sales(
     query = (
         select(Sale)
         .options(selectinload(Sale.items))
+        .where(Sale.cancelled == False)  # noqa: E712
         .order_by(Sale.created_at.desc())
     )
 
@@ -121,3 +122,27 @@ async def get_sales_count(
 
     result = await db.execute(query)
     return {"count": result.scalar()}
+
+
+@router.delete("/{sale_id}", status_code=204)
+async def cancel_sale(
+    sale_id: int,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Sale).options(selectinload(Sale.items)).where(Sale.id == sale_id)
+    )
+    sale = result.scalars().first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Venta no encontrada")
+    if sale.cancelled:
+        raise HTTPException(status_code=400, detail="La venta ya fue cancelada")
+    sale.cancelled = True
+    for item in sale.items:
+        prod = (
+            await db.execute(select(Product).where(Product.id == item.product_id))
+        ).scalars().first()
+        if prod:
+            prod.stock += item.quantity
+    await db.commit()

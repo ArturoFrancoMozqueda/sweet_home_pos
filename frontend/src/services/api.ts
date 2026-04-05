@@ -35,6 +35,7 @@ async function request(path: string, options: RequestInit = {}) {
       throw new Error(`API error: ${response.status}`);
     }
 
+    if (response.status === 204) return null;
     return response.json();
   } finally {
     clearTimeout(timer);
@@ -47,4 +48,5 @@ export const api = {
     request(path, { method: "POST", body: JSON.stringify(body) }),
   put: (path: string, body: any) =>
     request(path, { method: "PUT", body: JSON.stringify(body) }),
+  delete: (path: string) => request(path, { method: "DELETE" }),
 };

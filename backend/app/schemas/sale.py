@@ -37,6 +37,7 @@ class SaleResponse(BaseModel):
     payment_method: str
     created_at: datetime
     synced_at: datetime
+    cancelled: bool
     items: list[SaleItemResponse]
 
     model_config = {"from_attributes": True}

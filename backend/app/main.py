@@ -49,12 +49,21 @@ async def _migrate_user_id():
         ))
 
 
+async def _migrate_cancelled():
+    """Idempotent migration: add cancelled column to sales if missing."""
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            "ALTER TABLE sales ADD COLUMN IF NOT EXISTS cancelled BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Sweet Home POS...")
     await init_db()
     await _migrate_user_id()
+    await _migrate_cancelled()
     async with async_session() as db:
         await seed_products(db)
     await _seed_admin()
