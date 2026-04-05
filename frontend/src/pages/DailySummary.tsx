@@ -159,7 +159,16 @@ export function DailySummary() {
 
   return (
     <div className="page">
-      <h1 className="page-title">Resumen del Día</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+        <h1 className="page-title" style={{ margin: 0 }}>Resumen del Día</h1>
+        <button
+          className="btn btn-secondary no-print"
+          style={{ padding: "8px 14px", minHeight: "auto", fontSize: "0.85rem" }}
+          onClick={() => window.print()}
+        >
+          Imprimir
+        </button>
+      </div>
 
       <div className="summary-hero">
         <div className="summary-label">Total Vendido</div>
@@ -195,7 +204,7 @@ export function DailySummary() {
 
           {report.payment_breakdown.length > 0 && (
             <div className="summary-section">
-              <h3 className="summary-section-title">Por Metodo de Pago</h3>
+              <h3 className="summary-section-title">Por Método de Pago</h3>
               {report.payment_breakdown.map((p, i) => (
                 <div key={i} className={`payment-chip ${p.method}`}>
                   <span className="payment-chip-label">

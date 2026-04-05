@@ -272,3 +272,17 @@ select {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Print styles — hide nav and interactive elements */
+@media print {
+  .bottom-nav,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .page {
+    padding: 16px;
+  }
+}
