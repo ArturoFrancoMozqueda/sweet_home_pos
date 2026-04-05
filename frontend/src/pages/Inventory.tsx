@@ -21,12 +21,13 @@ export function Inventory() {
   const [formStock, setFormStock] = useState("0");
   const [formThreshold, setFormThreshold] = useState("5");
   const [formActive, setFormActive] = useState(true);
+  const [formImageUrl, setFormImageUrl] = useState("");
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
   const openCreate = () => {
     setFormName(""); setFormPrice(""); setFormStock("0");
-    setFormThreshold("5"); setFormActive(true); setFormError("");
+    setFormThreshold("5"); setFormActive(true); setFormImageUrl(""); setFormError("");
     setEditTarget(null);
     setMode("create");
   };
@@ -37,6 +38,7 @@ export function Inventory() {
     setFormStock(String(product.stock));
     setFormThreshold(String(product.low_stock_threshold));
     setFormActive(product.active);
+    setFormImageUrl(product.image_url || "");
     setFormError("");
     setEditTarget(product);
     setMode("edit");
@@ -57,22 +59,25 @@ export function Inventory() {
     setFormSaving(true);
     setFormError("");
     try {
+      const imageUrl = formImageUrl.trim() || undefined;
       if (mode === "create") {
         const p = await api.post("/api/products", {
           name, price,
           stock: isNaN(stock) ? 0 : stock,
           low_stock_threshold: isNaN(threshold) ? 5 : threshold,
           active: true,
+          image_url: imageUrl,
         });
-        await db.products.put({ id: p.id, name: p.name, price: p.price, stock: p.stock, low_stock_threshold: p.low_stock_threshold, active: p.active });
+        await db.products.put({ id: p.id, name: p.name, price: p.price, stock: p.stock, low_stock_threshold: p.low_stock_threshold, active: p.active, image_url: p.image_url });
         showToast("Producto creado");
       } else if (editTarget) {
         const p = await api.put(`/api/products/${editTarget.id}`, {
           name, price,
           low_stock_threshold: isNaN(threshold) ? 5 : threshold,
           active: formActive,
+          image_url: imageUrl,
         });
-        await db.products.update(editTarget.id, { name: p.name, price: p.price, low_stock_threshold: p.low_stock_threshold, active: p.active });
+        await db.products.update(editTarget.id, { name: p.name, price: p.price, low_stock_threshold: p.low_stock_threshold, active: p.active, image_url: p.image_url });
         showToast("Producto actualizado");
       }
       closeForm();
@@ -273,6 +278,16 @@ export function Inventory() {
                     />
                   </div>
                 )}
+                <div className="login-field">
+                  <label>Imagen (URL)</label>
+                  <input
+                    type="url"
+                    value={formImageUrl}
+                    onChange={(e) => setFormImageUrl(e.target.value)}
+                    placeholder="https://ejemplo.com/imagen.jpg"
+                    disabled={formSaving}
+                  />
+                </div>
                 <div className="login-field">
                   <label>Alerta stock bajo (cantidad)</label>
                   <input

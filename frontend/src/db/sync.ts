@@ -57,6 +57,7 @@ export async function syncToServer(): Promise<boolean> {
             stock: p.stock,
             low_stock_threshold: p.low_stock_threshold,
             active: p.active,
+            image_url: p.image_url,
           }))
         );
       });
@@ -83,6 +84,7 @@ export async function refreshProducts(): Promise<boolean> {
             stock: p.stock,
             low_stock_threshold: p.low_stock_threshold,
             active: p.active,
+            image_url: p.image_url,
           }))
         );
       });

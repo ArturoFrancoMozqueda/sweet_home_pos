@@ -7,6 +7,7 @@ export interface DBProduct {
   stock: number;
   low_stock_threshold: number;
   active: boolean;
+  image_url?: string;
 }
 
 export interface DBSaleItem {
@@ -43,6 +44,12 @@ class SweetHomeDB extends Dexie {
     });
     // Version 2: add user_id index to sales
     this.version(2).stores({
+      products: "id, name, active",
+      sales: "++id, client_uuid, created_at, synced, user_id",
+      saleItems: "++id, sale_uuid, product_id",
+    });
+    // Version 3: image_url on products (no index needed)
+    this.version(3).stores({
       products: "id, name, active",
       sales: "++id, client_uuid, created_at, synced, user_id",
       saleItems: "++id, sale_uuid, product_id",

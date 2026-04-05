@@ -26,11 +26,21 @@ export function ProductGrid({ products, cart, onAddToCart }: Props) {
             disabled={outOfStock}
           >
             {qty > 0 && <span className="cart-badge">{qty}</span>}
+            <div className="product-img-wrapper">
+              {product.image_url ? (
+                <img
+                  src={product.image_url}
+                  alt={product.name}
+                  className="product-img"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="product-img-placeholder">🍪</div>
+              )}
+            </div>
             <span className="product-name">{product.name}</span>
             <span className="product-price">${product.price}</span>
-            <span className="product-stock">
-              {outOfStock ? "Agotado" : `${product.stock} disp.`}
-            </span>
+            {outOfStock && <span className="product-out-label">Agotado</span>}
           </button>
         );
       })}
