@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -14,7 +15,7 @@ class SaleItemCreate(BaseModel):
 class SaleCreate(BaseModel):
     client_uuid: str
     total: float
-    payment_method: str
+    payment_method: Literal["efectivo", "transferencia"]
     created_at: datetime
     items: list[SaleItemCreate]
 
