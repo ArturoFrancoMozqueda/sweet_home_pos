@@ -31,6 +31,13 @@ async def create_sale(
     if existing.scalars().first():
         raise HTTPException(status_code=409, detail="Venta ya registrada")
 
+    expected_total = sum(item.subtotal for item in data.items)
+    if abs(data.total - expected_total) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Total no coincide con los items (esperado: {expected_total:.2f}, recibido: {data.total:.2f})",
+        )
+
     sale = Sale(
         client_uuid=data.client_uuid,
         total=data.total,

@@ -31,6 +31,11 @@ async def sync_sales(
             synced_uuids.append(sale_data.client_uuid)
             continue
 
+        # Validate total matches items
+        expected_total = sum(item.subtotal for item in sale_data.items)
+        if abs(sale_data.total - expected_total) > 0.01:
+            continue  # Skip this sale, don't include in synced_uuids
+
         sale = Sale(
             client_uuid=sale_data.client_uuid,
             total=sale_data.total,
