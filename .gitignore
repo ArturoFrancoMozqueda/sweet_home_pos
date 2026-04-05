@@ -35,5 +35,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Uploads (keep directory structure only)
+backend/uploads/products/*
+!backend/uploads/products/.gitkeep
+
 # Claude
 /.claude

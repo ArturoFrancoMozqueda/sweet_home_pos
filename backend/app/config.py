@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
+
+UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads" / "products"
 
 
 class Settings(BaseSettings):

@@ -3,9 +3,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
-from app.config import settings
+from app.config import UPLOADS_DIR, settings
 from app.database import async_session, engine, init_db
 from app.routers import products, reports, sales, sync
 from app.routers import auth as auth_router
@@ -69,6 +70,7 @@ async def _migrate_image_url():
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Sweet Home POS...")
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     await init_db()
     await _migrate_user_id()
     await _migrate_cancelled()
@@ -105,6 +107,8 @@ app.include_router(products.router)
 app.include_router(sales.router)
 app.include_router(reports.router)
 app.include_router(sync.router)
+
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR.parent), name="uploads")
 
 
 @app.get("/api/health")

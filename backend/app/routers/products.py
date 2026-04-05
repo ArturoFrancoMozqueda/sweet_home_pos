@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import UPLOADS_DIR
 from app.database import get_db
 from app.models.product import Product
 from app.models.user import User
@@ -83,3 +86,27 @@ async def get_low_stock(
         .order_by(Product.stock)
     )
     return result.scalars().all()
+
+
+ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_SIZE = 5 * 1024 * 1024  # 5 MB
+
+
+@router.post("/upload-image")
+async def upload_image(
+    file: UploadFile,
+    _: User = Depends(require_admin),
+):
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Solo imágenes JPG, PNG, WebP o GIF")
+
+    contents = await file.read()
+    if len(contents) > MAX_SIZE:
+        raise HTTPException(status_code=400, detail="Imagen demasiado grande (máx 5 MB)")
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "jpg"
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    filepath = UPLOADS_DIR / filename
+    filepath.write_bytes(contents)
+
+    return {"url": f"/uploads/products/{filename}"}
