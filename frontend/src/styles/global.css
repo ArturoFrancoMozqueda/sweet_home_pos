@@ -39,6 +39,9 @@
   --radius-xs: 6px;
   --radius-pill: 999px;
 
+  /* Typography */
+  --font-display: 'Fredoka', sans-serif;
+
   /* Layout */
   --nav-height: 72px;
   --header-height: 56px;
