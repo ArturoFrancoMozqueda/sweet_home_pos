@@ -34,7 +34,7 @@ async def generate_daily_report(db: AsyncSession, date_str: str | None = None) -
     # Total sales and count
     sales_result = await db.execute(
         select(func.count(Sale.id), func.coalesce(func.sum(Sale.total), 0)).where(
-            Sale.created_at >= start, Sale.created_at <= end
+            Sale.created_at >= start, Sale.created_at <= end, Sale.cancelled == False  # noqa: E712
         )
     )
     row = sales_result.one()
@@ -44,7 +44,7 @@ async def generate_daily_report(db: AsyncSession, date_str: str | None = None) -
     # Payment breakdown
     payment_result = await db.execute(
         select(Sale.payment_method, func.count(Sale.id), func.sum(Sale.total))
-        .where(Sale.created_at >= start, Sale.created_at <= end)
+        .where(Sale.created_at >= start, Sale.created_at <= end, Sale.cancelled == False)  # noqa: E712
         .group_by(Sale.payment_method)
     )
     payment_breakdown = [
@@ -60,7 +60,7 @@ async def generate_daily_report(db: AsyncSession, date_str: str | None = None) -
             func.sum(SaleItem.subtotal).label("revenue"),
         )
         .join(Sale, SaleItem.sale_id == Sale.id)
-        .where(Sale.created_at >= start, Sale.created_at <= end)
+        .where(Sale.created_at >= start, Sale.created_at <= end, Sale.cancelled == False)  # noqa: E712
         .group_by(SaleItem.product_name)
         .order_by(func.sum(SaleItem.quantity).desc())
         .limit(5)
