@@ -59,14 +59,13 @@ function mergeUnsyncedIntoReport(
 export function DailySummary() {
   const [report, setReport] = useState<DailyReport | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const todayStr = getTodayStr();
+  const [selectedDate, setSelectedDate] = useState(getTodayStr);
 
   // Local sales as fallback AND to patch server report with unsynced sales
   const localSales = useLiveQuery(async () => {
     const allSales = await db.sales.toArray();
-    return allSales.filter((s) => toMexicoDateStr(s.created_at) === todayStr);
-  }, [todayStr], []);
+    return allSales.filter((s) => toMexicoDateStr(s.created_at) === selectedDate);
+  }, [selectedDate], []);
 
   const localSaleItems = useLiveQuery(async () => {
     if (!localSales || localSales.length === 0) return [];
@@ -79,7 +78,7 @@ export function DailySummary() {
     const fetchReport = async () => {
       if (navigator.onLine) {
         try {
-          const data = await api.get(`/api/reports/daily?date=${todayStr}`);
+          const data = await api.get(`/api/reports/daily?date=${selectedDate}`);
 
           // Patch server report with any local sales not yet synced
           const pendingSales = (localSales ?? []).filter((s) => !s.synced);
@@ -122,7 +121,7 @@ export function DailySummary() {
       }
 
       setReport({
-        date: todayStr,
+        date: selectedDate,
         total_sales_count: localSales.length,
         total_amount: totalAmount,
         payment_breakdown: Array.from(paymentMap, ([method, data]) => ({ method, ...data })),
@@ -134,7 +133,7 @@ export function DailySummary() {
     };
 
     fetchReport();
-  }, [todayStr, localSales, localSaleItems]);
+  }, [selectedDate, localSales, localSaleItems]);
 
   if (loading) {
     return (
@@ -167,6 +166,21 @@ export function DailySummary() {
           onClick={() => window.print()}
         >
           Imprimir
+        </button>
+      </div>
+
+      <div className="history-date-filter no-print" style={{ marginBottom: 12 }}>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => { setSelectedDate(e.target.value); setLoading(true); }}
+        />
+        <button
+          className="btn btn-secondary"
+          style={{ padding: "10px 14px", minHeight: "auto", fontSize: "0.85rem" }}
+          onClick={() => { setSelectedDate(getTodayStr()); setLoading(true); }}
+        >
+          Hoy
         </button>
       </div>
 
