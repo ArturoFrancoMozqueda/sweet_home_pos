@@ -51,7 +51,12 @@ async def create_sale(
         result = await db.execute(select(Product).where(Product.id == item_data.product_id))
         product = result.scalars().first()
         if product:
-            product.stock = max(0, product.stock - item_data.quantity)
+            if product.stock < item_data.quantity:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Stock insuficiente para {item_data.product_name}",
+                )
+            product.stock -= item_data.quantity
 
     db.add(sale)
     await db.commit()
