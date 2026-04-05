@@ -384,9 +384,9 @@ export function Inventory() {
                   type="submit"
                   className="btn btn-primary"
                   style={{ width: "100%", marginTop: 8 }}
-                  disabled={formSaving || !formName.trim() || !formPrice}
+                  disabled={formSaving || formUploading || !formName.trim() || !formPrice}
                 >
-                  {formSaving ? "Guardando..." : "Guardar"}
+                  {formUploading ? "Subiendo imagen..." : formSaving ? "Guardando..." : "Guardar"}
                 </button>
               </form>
             </div>
