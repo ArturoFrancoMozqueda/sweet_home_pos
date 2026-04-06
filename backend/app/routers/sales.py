@@ -55,7 +55,9 @@ async def create_sale(
             unit_price=item_data.unit_price,
             subtotal=item_data.subtotal,
         ))
-        result = await db.execute(select(Product).where(Product.id == item_data.product_id))
+        result = await db.execute(
+            select(Product).where(Product.id == item_data.product_id).with_for_update()
+        )
         product = result.scalars().first()
         if product:
             if product.stock < item_data.quantity:
@@ -153,7 +155,7 @@ async def cancel_sale(
     sale.cancelled = True
     for item in sale.items:
         prod = (
-            await db.execute(select(Product).where(Product.id == item.product_id))
+            await db.execute(select(Product).where(Product.id == item.product_id).with_for_update())
         ).scalars().first()
         if prod:
             prod.stock += item.quantity

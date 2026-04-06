@@ -55,9 +55,9 @@ async def sync_sales(
             )
             sale.items.append(sale_item)
 
-            # Discount inventory
+            # Discount inventory with row lock
             result = await db.execute(
-                select(Product).where(Product.id == item_data.product_id)
+                select(Product).where(Product.id == item_data.product_id).with_for_update()
             )
             product = result.scalars().first()
             if product:
