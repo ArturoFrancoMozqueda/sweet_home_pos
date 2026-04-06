@@ -1,14 +1,14 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ProductBase(BaseModel):
-    name: str
-    price: float
-    stock: int = 0
-    low_stock_threshold: int = 5
+    name: str = Field(..., min_length=1, max_length=100)
+    price: float = Field(..., gt=0)
+    stock: int = Field(default=0, ge=0)
+    low_stock_threshold: int = Field(default=5, ge=0)
     active: bool = True
     image_url: Optional[str] = None
 
@@ -34,4 +34,4 @@ class ProductResponse(ProductBase):
 
 
 class ProductStockUpdate(BaseModel):
-    stock: int
+    stock: int = Field(..., ge=0)
