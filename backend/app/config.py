@@ -24,3 +24,9 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+if settings.jwt_secret == "changeme-use-a-real-secret-in-production":
+    import logging as _log
+    _log.getLogger(__name__).warning(
+        "⚠️  JWT_SECRET is using the default value. Set a secure secret in .env for production!"
+    )
