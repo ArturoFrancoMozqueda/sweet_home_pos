@@ -17,7 +17,7 @@ class Product(Base):
     low_stock_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )

@@ -43,7 +43,7 @@ async def create_sale(
         total=data.total,
         payment_method=data.payment_method,
         created_at=data.created_at.replace(tzinfo=None),
-        synced_at=datetime.now(timezone.utc),
+        synced_at=datetime.utcnow(),
         user_id=current_user.id,
     )
 
