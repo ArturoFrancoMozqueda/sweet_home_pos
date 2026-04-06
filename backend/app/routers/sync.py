@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -46,7 +46,7 @@ async def sync_sales(
             total=sale_data.total,
             payment_method=sale_data.payment_method,
             created_at=sale_data.created_at.replace(tzinfo=None),
-            synced_at=datetime.utcnow(),
+            synced_at=datetime.now(timezone.utc),
             user_id=current_user.id,
         )
 

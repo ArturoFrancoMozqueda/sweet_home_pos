@@ -43,7 +43,7 @@ async def create_sale(
         total=data.total,
         payment_method=data.payment_method,
         created_at=data.created_at.replace(tzinfo=None),
-        synced_at=datetime.utcnow(),
+        synced_at=datetime.now(timezone.utc),
         user_id=current_user.id,
     )
 
@@ -109,7 +109,7 @@ async def get_sales(
 
     query = query.limit(limit).offset(offset)
     result = await db.execute(query)
-    return result.scalars().unique().all()
+    return result.scalars().all()
 
 
 @router.get("/count")
