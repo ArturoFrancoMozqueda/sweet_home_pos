@@ -12,6 +12,7 @@ import { DailySummary } from "./pages/DailySummary";
 import { SalesHistory } from "./pages/SalesHistory";
 import { Login } from "./pages/Login";
 import { Users } from "./pages/Users";
+import { Shifts } from "./pages/Shifts";
 
 function AuthenticatedApp({ user }: { user: import("./contexts/AuthContext").AuthUser }) {
   const { isOnline, isSyncing, syncError, triggerSync } = useOnlineStatus();
@@ -23,6 +24,7 @@ function AuthenticatedApp({ user }: { user: import("./contexts/AuthContext").Aut
         <Route path="/" element={<RegisterSale />} />
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/history" element={<SalesHistory />} />
+        <Route path="/shifts" element={<Shifts />} />
         {user.role === "admin" && (
           <>
             <Route path="/summary" element={<DailySummary />} />
