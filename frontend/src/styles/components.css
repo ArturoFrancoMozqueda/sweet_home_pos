@@ -105,8 +105,14 @@
   flex-shrink: 0;
 }
 
+.sync-bar.error {
+  background: var(--danger-soft);
+  color: #7f1d1d;
+}
+
 .sync-dot.online  { background: var(--success); }
 .sync-dot.offline { background: var(--warning); }
+.sync-dot.error   { background: var(--danger); }
 .sync-dot.syncing {
   background: #3b82f6;
   animation: pulse 1s infinite;
