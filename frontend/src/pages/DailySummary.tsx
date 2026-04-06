@@ -192,6 +192,29 @@ export function DailySummary() {
         </div>
       </div>
 
+      {report.estimated_profit != null && report.total_cost != null && report.total_cost > 0 && (
+        <div className="card" style={{ display: "flex", justifyContent: "space-around", textAlign: "center", marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-light)", textTransform: "uppercase" }}>Costo</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text)" }}>
+              ${report.total_cost.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-light)", textTransform: "uppercase" }}>Ganancia Estimada</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: report.estimated_profit >= 0 ? "var(--success)" : "var(--danger)" }}>
+              ${report.estimated_profit.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-light)", textTransform: "uppercase" }}>Margen</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text)" }}>
+              {report.total_amount > 0 ? Math.round((report.estimated_profit / report.total_amount) * 100) : 0}%
+            </div>
+          </div>
+        </div>
+      )}
+
       {report.total_sales_count === 0 ? (
         <div className="card" style={{ textAlign: "center", color: "var(--text-light)" }}>
           <p>No hay ventas registradas hoy.</p>

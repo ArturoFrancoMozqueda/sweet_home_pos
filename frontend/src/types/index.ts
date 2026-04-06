@@ -36,6 +36,8 @@ export interface DailyReport {
   date: string;
   total_sales_count: number;
   total_amount: number;
+  estimated_profit?: number;
+  total_cost?: number;
   payment_breakdown: { method: string; count: number; total: number }[];
   top_products: { name: string; quantity: number; revenue: number }[];
   low_stock_products: { name: string; stock: number; threshold: number }[];

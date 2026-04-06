@@ -91,6 +91,7 @@ export async function syncToServer(): Promise<boolean> {
         stock: p.stock,
         low_stock_threshold: p.low_stock_threshold,
         active: p.active,
+        cost_price: p.cost_price,
         image_url: p.image_url,
         image_data: imageDataMap.get(p.id),
       }));
@@ -129,6 +130,7 @@ export async function refreshProducts(): Promise<boolean> {
         stock: p.stock,
         low_stock_threshold: p.low_stock_threshold,
         active: p.active,
+        cost_price: p.cost_price,
         image_url: p.image_url,
         image_data: imageDataMap.get(p.id),
       }));

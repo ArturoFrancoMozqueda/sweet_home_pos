@@ -24,6 +24,7 @@ export function Inventory() {
   const [formStock, setFormStock] = useState("0");
   const [formThreshold, setFormThreshold] = useState("5");
   const [formActive, setFormActive] = useState(true);
+  const [formCostPrice, setFormCostPrice] = useState("");
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formImagePreview, setFormImagePreview] = useState("");
   const [formImageData, setFormImageData] = useState("");
@@ -32,7 +33,7 @@ export function Inventory() {
   const [formError, setFormError] = useState("");
 
   const openCreate = () => {
-    setFormName(""); setFormPrice(""); setFormStock("0");
+    setFormName(""); setFormPrice(""); setFormCostPrice(""); setFormStock("0");
     setFormThreshold("5"); setFormActive(true); setFormImageUrl(""); setFormImagePreview(""); setFormImageData(""); setFormError("");
     setEditTarget(null);
     setMode("create");
@@ -44,6 +45,7 @@ export function Inventory() {
     setFormStock(String(product.stock));
     setFormThreshold(String(product.low_stock_threshold));
     setFormActive(product.active);
+    setFormCostPrice(product.cost_price != null ? String(product.cost_price) : "");
     setFormImageUrl(product.image_url || "");
     setFormImagePreview(product.image_data || "");
     setFormImageData(product.image_data || "");
@@ -114,24 +116,27 @@ export function Inventory() {
     setFormError("");
     try {
       const imageUrl = formImageUrl.trim() || undefined;
+      const costPrice = formCostPrice ? parseFloat(formCostPrice) : undefined;
       if (mode === "create") {
         const p = await api.post("/api/products", {
           name, price,
           stock: isNaN(stock) ? 0 : stock,
           low_stock_threshold: isNaN(threshold) ? 5 : threshold,
           active: true,
+          cost_price: costPrice,
           image_url: imageUrl,
         });
-        await db.products.put({ id: p.id, name: p.name, price: p.price, stock: p.stock, low_stock_threshold: p.low_stock_threshold, active: p.active, image_url: p.image_url, image_data: formImageData || undefined });
+        await db.products.put({ id: p.id, name: p.name, price: p.price, stock: p.stock, low_stock_threshold: p.low_stock_threshold, active: p.active, cost_price: p.cost_price, image_url: p.image_url, image_data: formImageData || undefined });
         showToast("Producto creado");
       } else if (editTarget) {
         const p = await api.put(`/api/products/${editTarget.id}`, {
           name, price,
           low_stock_threshold: isNaN(threshold) ? 5 : threshold,
           active: formActive,
+          cost_price: costPrice,
           image_url: imageUrl,
         });
-        await db.products.update(editTarget.id, { name: p.name, price: p.price, low_stock_threshold: p.low_stock_threshold, active: p.active, image_url: p.image_url, image_data: formImageData || undefined });
+        await db.products.update(editTarget.id, { name: p.name, price: p.price, low_stock_threshold: p.low_stock_threshold, active: p.active, cost_price: p.cost_price, image_url: p.image_url, image_data: formImageData || undefined });
         showToast("Producto actualizado");
       }
       closeForm();
@@ -315,11 +320,23 @@ export function Inventory() {
                   />
                 </div>
                 <div className="login-field">
-                  <label>Precio ($)</label>
+                  <label>Precio de venta ($)</label>
                   <input
                     type="number"
                     value={formPrice}
                     onChange={(e) => setFormPrice(e.target.value)}
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0"
+                    disabled={formSaving}
+                  />
+                </div>
+                <div className="login-field">
+                  <label>Costo ($) <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 400 }}>opcional</span></label>
+                  <input
+                    type="number"
+                    value={formCostPrice}
+                    onChange={(e) => setFormCostPrice(e.target.value)}
                     placeholder="0.00"
                     step="0.01"
                     min="0"

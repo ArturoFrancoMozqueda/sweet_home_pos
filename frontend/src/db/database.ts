@@ -7,6 +7,7 @@ export interface DBProduct {
   stock: number;
   low_stock_threshold: number;
   active: boolean;
+  cost_price?: number;
   image_url?: string;
   image_data?: string; // base64 data URL for offline display
 }
