@@ -66,6 +66,21 @@ async def _migrate_image_url():
         ))
 
 
+async def _migrate_numeric_columns():
+    """Idempotent migration: convert Float columns to NUMERIC(10,2) for precision."""
+    async with engine.begin() as conn:
+        for stmt in [
+            "ALTER TABLE products ALTER COLUMN price TYPE NUMERIC(10,2)",
+            "ALTER TABLE sales ALTER COLUMN total TYPE NUMERIC(10,2)",
+            "ALTER TABLE sale_items ALTER COLUMN unit_price TYPE NUMERIC(10,2)",
+            "ALTER TABLE sale_items ALTER COLUMN subtotal TYPE NUMERIC(10,2)",
+        ]:
+            try:
+                await conn.execute(text(stmt))
+            except Exception:
+                pass  # Column already NUMERIC or SQLite (no ALTER TYPE)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -75,6 +90,7 @@ async def lifespan(app: FastAPI):
     await _migrate_user_id()
     await _migrate_cancelled()
     await _migrate_image_url()
+    await _migrate_numeric_columns()
     async with async_session() as db:
         await seed_products(db)
     await _seed_admin()
