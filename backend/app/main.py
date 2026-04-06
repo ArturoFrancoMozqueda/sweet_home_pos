@@ -115,6 +115,11 @@ async def lifespan(app: FastAPI):
     await _migrate_image_url()
     await _migrate_numeric_columns()
     await _migrate_shifts()
+    # Add cost_price column to products
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            "ALTER TABLE products ADD COLUMN IF NOT EXISTS cost_price NUMERIC(10,2)"
+        ))
     async with async_session() as db:
         await seed_products(db)
     await _seed_admin()

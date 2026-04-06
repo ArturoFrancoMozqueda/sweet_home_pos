@@ -70,6 +70,26 @@ async def generate_daily_report(db: AsyncSession, date_str: str | None = None) -
         for r in top_result.all()
     ]
 
+    # Estimated profit (only for products with cost_price set)
+    profit_result = await db.execute(
+        select(
+            func.coalesce(func.sum(SaleItem.subtotal), 0),
+            func.coalesce(func.sum(SaleItem.quantity * Product.cost_price), 0),
+        )
+        .join(Sale, SaleItem.sale_id == Sale.id)
+        .join(Product, SaleItem.product_id == Product.id)
+        .where(
+            Sale.created_at >= start,
+            Sale.created_at <= end,
+            Sale.cancelled == False,  # noqa: E712
+            Product.cost_price.isnot(None),
+        )
+    )
+    profit_row = profit_result.one()
+    revenue_with_cost = float(profit_row[0])
+    total_cost = float(profit_row[1])
+    estimated_profit = revenue_with_cost - total_cost
+
     # Low stock products
     low_stock_result = await db.execute(
         select(Product)
@@ -88,6 +108,8 @@ async def generate_daily_report(db: AsyncSession, date_str: str | None = None) -
         "date": report_date,
         "total_sales_count": total_sales_count,
         "total_amount": total_amount,
+        "estimated_profit": estimated_profit,
+        "total_cost": total_cost,
         "payment_breakdown": payment_breakdown,
         "top_products": top_products,
         "low_stock_products": low_stock,
