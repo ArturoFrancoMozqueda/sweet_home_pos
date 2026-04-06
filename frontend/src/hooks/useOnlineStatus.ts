@@ -1,18 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { syncToServer } from "../db/sync";
 
 export function useOnlineStatus() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [syncError, setSyncError] = useState(false);
+  const syncingRef = useRef(false);
 
   const triggerSync = async () => {
-    if (isSyncing || !navigator.onLine) return;
+    if (syncingRef.current || !navigator.onLine) return;
+    syncingRef.current = true;
     setIsSyncing(true);
+    setSyncError(false);
     try {
       const success = await syncToServer();
-      if (success) setLastSync(new Date());
+      if (success) {
+        setLastSync(new Date());
+      } else {
+        setSyncError(true);
+      }
+    } catch {
+      setSyncError(true);
     } finally {
+      syncingRef.current = false;
       setIsSyncing(false);
     }
   };
@@ -27,7 +38,6 @@ export function useOnlineStatus() {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Sync on visibility change (user opens app)
     const handleVisibility = () => {
       if (document.visibilityState === "visible" && navigator.onLine) {
         triggerSync();
@@ -35,7 +45,6 @@ export function useOnlineStatus() {
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
-    // Initial sync
     if (navigator.onLine) triggerSync();
 
     return () => {
@@ -45,5 +54,5 @@ export function useOnlineStatus() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { isOnline, isSyncing, lastSync, triggerSync };
+  return { isOnline, isSyncing, lastSync, syncError, triggerSync };
 }
