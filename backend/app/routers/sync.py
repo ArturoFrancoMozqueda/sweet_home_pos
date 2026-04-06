@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.product import Product
 from app.models.sale import Sale, SaleItem
+from app.models.shift import Shift
 from app.models.user import User
 from app.routers.auth import get_current_user
 from app.schemas.sync import SyncFailure, SyncRequest, SyncResponse
@@ -22,6 +23,12 @@ async def sync_sales(
 ):
     synced_uuids: list[str] = []
     failed: list[SyncFailure] = []
+
+    # Find user's current open shift
+    shift_result = await db.execute(
+        select(Shift).where(Shift.user_id == current_user.id, Shift.closed_at.is_(None))
+    )
+    current_shift = shift_result.scalars().first()
 
     for sale_data in data.sales:
         # Skip if already synced (deduplication by UUID)
@@ -48,6 +55,7 @@ async def sync_sales(
             created_at=sale_data.created_at.replace(tzinfo=None),
             synced_at=datetime.utcnow(),
             user_id=current_user.id,
+            shift_id=current_shift.id if current_shift else None,
         )
 
         for item_data in sale_data.items:

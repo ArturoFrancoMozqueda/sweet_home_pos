@@ -14,6 +14,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.product import Product
 from app.models.sale import Sale, SaleItem
+from app.models.shift import Shift
 from app.models.user import User
 from app.routers.auth import get_current_user, require_admin
 from app.schemas.sale import SaleCreate, SaleResponse
@@ -38,6 +39,12 @@ async def create_sale(
             detail=f"Total no coincide con los items (esperado: {expected_total:.2f}, recibido: {data.total:.2f})",
         )
 
+    # Find user's current open shift
+    shift_result = await db.execute(
+        select(Shift).where(Shift.user_id == current_user.id, Shift.closed_at.is_(None))
+    )
+    current_shift = shift_result.scalars().first()
+
     sale = Sale(
         client_uuid=data.client_uuid,
         total=data.total,
@@ -45,6 +52,7 @@ async def create_sale(
         created_at=data.created_at.replace(tzinfo=None),
         synced_at=datetime.utcnow(),
         user_id=current_user.id,
+        shift_id=current_shift.id if current_shift else None,
     )
 
     for item_data in data.items:
