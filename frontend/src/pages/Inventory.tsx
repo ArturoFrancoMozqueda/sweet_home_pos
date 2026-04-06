@@ -93,7 +93,7 @@ export function Inventory() {
       showToast("Imagen subida");
     } catch (err: any) {
       // Base64 is already stored locally — image works offline even if upload fails
-      showToast("Imagen guardada localmente (se subirá al sincronizar)");
+      showToast("Imagen guardada solo en este dispositivo");
     } finally {
       setFormUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -143,27 +143,34 @@ export function Inventory() {
   };
 
   const adjustStock = async (productId: number, delta: number) => {
+    if (!navigator.onLine) {
+      showToast("Se requiere conexión para ajustar stock");
+      return;
+    }
     const product = await db.products.get(productId);
     if (!product) return;
     const newStock = Math.max(0, product.stock + delta);
-    await db.products.update(productId, { stock: newStock });
-    if (navigator.onLine) {
-      try { await api.put(`/api/products/${productId}/stock`, { stock: newStock }); }
-      catch { /* Will sync later */ }
+    try {
+      await api.put(`/api/products/${productId}/stock`, { stock: newStock });
+      await db.products.update(productId, { stock: newStock });
+    } catch {
+      showToast("Error al actualizar stock");
     }
   };
 
   const setStock = async (productId: number, value: string) => {
+    if (!navigator.onLine) {
+      showToast("Se requiere conexión para ajustar stock");
+      return;
+    }
     const num = parseInt(value, 10);
     if (isNaN(num) || num < 0) return;
-    await db.products.update(productId, { stock: num });
-    if (navigator.onLine) {
-      try {
-        await api.put(`/api/products/${productId}/stock`, { stock: num });
-        showToast("Stock actualizado");
-      } catch {
-        showToast("Guardado local (sync pendiente)");
-      }
+    try {
+      await api.put(`/api/products/${productId}/stock`, { stock: num });
+      await db.products.update(productId, { stock: num });
+      showToast("Stock actualizado");
+    } catch {
+      showToast("Error al actualizar stock");
     }
   };
 
