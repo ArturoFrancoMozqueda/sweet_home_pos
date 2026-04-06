@@ -9,7 +9,7 @@ from app.models.product import Product
 from app.models.sale import Sale, SaleItem
 from app.models.user import User
 from app.routers.auth import get_current_user
-from app.schemas.sync import SyncRequest, SyncResponse
+from app.schemas.sync import SyncFailure, SyncRequest, SyncResponse
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
 
@@ -21,6 +21,7 @@ async def sync_sales(
     db: AsyncSession = Depends(get_db),
 ):
     synced_uuids: list[str] = []
+    failed: list[SyncFailure] = []
 
     for sale_data in data.sales:
         # Skip if already synced (deduplication by UUID)
@@ -34,7 +35,11 @@ async def sync_sales(
         # Validate total matches items
         expected_total = sum(item.subtotal for item in sale_data.items)
         if abs(sale_data.total - expected_total) > 0.01:
-            continue  # Skip this sale, don't include in synced_uuids
+            failed.append(SyncFailure(
+                uuid=sale_data.client_uuid,
+                reason=f"Total no coincide (esperado: {expected_total:.2f}, recibido: {sale_data.total:.2f})",
+            ))
+            continue
 
         sale = Sale(
             client_uuid=sale_data.client_uuid,
@@ -74,4 +79,4 @@ async def sync_sales(
     )
     products = result.scalars().all()
 
-    return SyncResponse(synced_uuids=synced_uuids, products=products)
+    return SyncResponse(synced_uuids=synced_uuids, failed=failed, products=products)
