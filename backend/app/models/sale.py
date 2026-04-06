@@ -18,6 +18,7 @@ class Sale(Base):
     synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     cancelled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    shift_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("shifts.id"), nullable=True)
 
     items: Mapped[list["SaleItem"]] = relationship(
         back_populates="sale", cascade="all, delete-orphan"

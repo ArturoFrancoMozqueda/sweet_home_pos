@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from app.config import UPLOADS_DIR, settings
 from app.database import async_session, engine, init_db
-from app.routers import products, reports, sales, sync
+from app.routers import products, reports, sales, shifts, sync
 from app.routers import auth as auth_router
 from app.seed import seed_products
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -81,6 +81,29 @@ async def _migrate_numeric_columns():
                 pass  # Column already NUMERIC or SQLite (no ALTER TYPE)
 
 
+async def _migrate_shifts():
+    """Idempotent migration: create shifts table and add shift_id to sales."""
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS shifts (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                opened_at TIMESTAMP NOT NULL,
+                closed_at TIMESTAMP,
+                opening_cash NUMERIC(10,2) NOT NULL,
+                closing_cash NUMERIC(10,2),
+                expected_cash NUMERIC(10,2),
+                cash_sales NUMERIC(10,2),
+                transfer_sales NUMERIC(10,2),
+                variance NUMERIC(10,2),
+                notes VARCHAR(500)
+            )
+        """))
+        await conn.execute(text(
+            "ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id INTEGER REFERENCES shifts(id)"
+        ))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -91,6 +114,7 @@ async def lifespan(app: FastAPI):
     await _migrate_cancelled()
     await _migrate_image_url()
     await _migrate_numeric_columns()
+    await _migrate_shifts()
     async with async_session() as db:
         await seed_products(db)
     await _seed_admin()
@@ -123,6 +147,7 @@ app.include_router(products.router)
 app.include_router(sales.router)
 app.include_router(reports.router)
 app.include_router(sync.router)
+app.include_router(shifts.router)
 
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR.parent), name="uploads")
 
