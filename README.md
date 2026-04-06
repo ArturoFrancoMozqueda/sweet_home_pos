@@ -1,6 +1,6 @@
 # Sweet Home POS
 
-Sistema de punto de venta para **Sweet Home — Repostería**.
+Sistema de punto de venta para **Sweet Home — Reposteria**.
 
 Aplicacion web movil, offline-first, para registrar ventas diarias de forma rapida desde el celular.
 
@@ -15,15 +15,21 @@ Aplicacion web movil, offline-first, para registrar ventas diarias de forma rapi
 ## Funcionalidades
 
 - Registro de ventas rapido en 3-4 toques
-- Descuento automatico de inventario al vender
+- Descuento automatico de inventario al vender (con row-level locking)
 - Funciona sin internet (offline-first con sincronizacion automatica)
 - Sistema de autenticacion con roles: **admin** y **empleado**
 - Gestion de usuarios (crear, activar/desactivar empleados)
 - Gestion de productos y precios desde la app (crear, editar, desactivar)
+- Imagenes de productos con subida de archivos y cache offline (base64)
+- Anulacion de ventas con restauracion automatica de stock (admin)
+- Gestion de turnos con conciliacion de caja (apertura/cierre)
 - Resumen diario con totales, productos mas vendidos, desglose por pago (admin)
+- Selector de fecha en resumen para consultar dias anteriores
 - Historial de ventas: admin ve todas, empleado ve solo las suyas
 - Gestion de inventario con alertas de stock bajo
+- Indicador de sincronizacion con estado de error y ventas pendientes
 - Correo automatico con resumen diario a las 9:00 PM hora Mexico
+- Validacion estricta de datos (precios > 0, cantidades > 0, totales verificados)
 
 ---
 
@@ -31,12 +37,16 @@ Aplicacion web movil, offline-first, para registrar ventas diarias de forma rapi
 
 | Funcion | Admin | Empleado |
 |---------|-------|----------|
-| Registrar ventas | ✓ | ✓ |
-| Ver inventario | ✓ | ✓ (solo lectura) |
-| Ver historial de ventas | ✓ (todas) | ✓ (solo las propias) |
-| Resumen del dia | ✓ | — |
-| Crear/editar productos y precios | ✓ | — |
-| Gestionar usuarios | ✓ | — |
+| Registrar ventas | Si | Si |
+| Ver inventario | Si | Si (solo lectura) |
+| Ver historial de ventas | Si (todas) | Si (solo las propias) |
+| Anular ventas | Si | — |
+| Abrir/cerrar turno | Si | Si |
+| Ver historial de turnos | Si (todos) | — |
+| Resumen del dia | Si | — |
+| Crear/editar productos y precios | Si | — |
+| Subir imagenes de productos | Si | — |
+| Gestionar usuarios | Si | — |
 
 ---
 
@@ -80,9 +90,11 @@ graph TD
 
 **Flujo principal:**
 1. El usuario abre la PWA e inicia sesion con usuario + contrasena
-2. Registra ventas que se guardan localmente en IndexedDB
-3. Cuando hay internet, la app sincroniza automaticamente con el backend
-4. El backend persiste en PostgreSQL y envia correos diarios
+2. Abre un turno declarando el dinero en caja
+3. Registra ventas que se guardan localmente en IndexedDB
+4. Cuando hay internet, la app sincroniza automaticamente con el backend
+5. Al terminar, cierra el turno contando el dinero — el sistema calcula si cuadra
+6. El backend persiste en PostgreSQL y envia correos diarios
 
 ---
 
@@ -147,11 +159,11 @@ sequenceDiagram
     IDB-->>PWA: [{venta1}, {venta2}, ...]
     PWA->>API: POST /api/sync {sales: [...]}
     API->>DB: INSERT ventas (ignora UUIDs duplicados)
-    API->>DB: UPDATE stock de productos
+    API->>DB: UPDATE stock con row-level locking
     DB-->>API: OK
-    API-->>PWA: {synced_uuids: [...], products: [...]}
+    API-->>PWA: {synced_uuids: [...], failed: [...], products: [...]}
     PWA->>IDB: Marca synced=true
-    PWA->>IDB: Actualiza productos locales
+    PWA->>IDB: Actualiza productos + cache imagenes como base64
 ```
 
 **Puntos clave:**
@@ -159,6 +171,28 @@ sequenceDiagram
 - Cada venta tiene un UUID unico generado en el cliente para evitar duplicados.
 - La sync se dispara: al abrir la app, al recuperar conexion, o con boton manual.
 - El catalogo de productos se refresca en cada sincronizacion.
+- Las imagenes de productos se descargan y cachean como base64 para uso offline.
+- El indicador de sync muestra errores y cuenta de ventas pendientes.
+- Las ventas que fallan validacion se reportan en `failed[]` con la razon.
+
+---
+
+## Flujo de Turnos / Conciliacion de Caja
+
+```
+APERTURA → Empleado ingresa dinero en caja ($500)
+  |
+TURNO ACTIVO → Se registran ventas normalmente
+  |        → Cada venta se vincula al turno abierto
+  |
+CIERRE → Empleado cuenta dinero y lo ingresa ($2,300)
+  |
+SISTEMA CALCULA:
+  ├─ Ventas efectivo del turno: $1,800
+  ├─ Ventas transferencia: $500
+  ├─ Esperado en caja: $500 (fondo) + $1,800 (efectivo) = $2,300
+  └─ Varianza: $2,300 - $2,300 = $0 (cuadra)
+```
 
 ---
 
@@ -178,22 +212,39 @@ erDiagram
     Product {
         int id PK
         string name
-        float price
+        decimal price
         int stock
         int low_stock_threshold
         bool active
+        string image_url
         datetime created_at
         datetime updated_at
+    }
+
+    Shift {
+        int id PK
+        int user_id FK
+        datetime opened_at
+        datetime closed_at
+        decimal opening_cash
+        decimal closing_cash
+        decimal expected_cash
+        decimal cash_sales
+        decimal transfer_sales
+        decimal variance
+        string notes
     }
 
     Sale {
         int id PK
         string client_uuid UK
-        float total
+        decimal total
         string payment_method
+        bool cancelled
         datetime created_at
         datetime synced_at
         int user_id FK
+        int shift_id FK
     }
 
     SaleItem {
@@ -202,62 +253,16 @@ erDiagram
         int product_id FK
         string product_name
         int quantity
-        float unit_price
-        float subtotal
+        decimal unit_price
+        decimal subtotal
     }
 
     User ||--o{ Sale : "registra"
+    User ||--o{ Shift : "trabaja"
+    Shift ||--o{ Sale : "contiene"
     Product ||--o{ SaleItem : "se vende en"
     Sale ||--|{ SaleItem : "contiene"
 ```
-
-### User
-
-| Campo | Tipo | Default | Descripcion |
-|-------|------|---------|-------------|
-| id | Integer PK | auto | ID unico |
-| username | String(50) UNIQUE | requerido | Nombre de usuario |
-| password_hash | String | requerido | Contrasena hasheada con bcrypt |
-| role | String(20) | requerido | `"admin"` o `"employee"` |
-| active | Boolean | true | Si puede iniciar sesion |
-| created_at | DateTime | UTC now | Fecha de creacion |
-
-### Product
-
-| Campo | Tipo | Default | Descripcion |
-|-------|------|---------|-------------|
-| id | Integer PK | auto | ID unico |
-| name | String(100) | requerido | Nombre del producto |
-| price | Float | requerido | Precio en MXN |
-| stock | Integer | 0 | Unidades disponibles |
-| low_stock_threshold | Integer | 5 | Umbral de alerta de stock bajo |
-| active | Boolean | true | Si aparece en el catalogo |
-| created_at | DateTime | UTC now | Fecha de creacion |
-| updated_at | DateTime | UTC now | Ultima actualizacion |
-
-### Sale
-
-| Campo | Tipo | Default | Descripcion |
-|-------|------|---------|-------------|
-| id | Integer PK | auto | ID unico |
-| client_uuid | String(36) UNIQUE | requerido | UUID del cliente (deduplicacion) |
-| total | Float | requerido | Total de la venta |
-| payment_method | String(20) | requerido | `"efectivo"` o `"transferencia"` |
-| created_at | DateTime | requerido | Hora de la venta (UTC, zona Mexico al mostrar) |
-| synced_at | DateTime | UTC now | Cuando se sincronizo |
-| user_id | Integer FK | nullable | Empleado que registro la venta |
-
-### SaleItem
-
-| Campo | Tipo | Default | Descripcion |
-|-------|------|---------|-------------|
-| id | Integer PK | auto | ID unico |
-| sale_id | Integer FK | requerido | Referencia a Sale |
-| product_id | Integer FK | requerido | Referencia a Product |
-| product_name | String(100) | requerido | Nombre snapshot (por si cambia) |
-| quantity | Integer | requerido | Cantidad vendida |
-| unit_price | Float | requerido | Precio al momento de la venta |
-| subtotal | Float | requerido | quantity * unit_price |
 
 ---
 
@@ -284,69 +289,68 @@ erDiagram
 sweet_home_pos/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                 # FastAPI app, lifespan, CORS, routers, seed admin
+│   │   ├── main.py                 # FastAPI app, lifespan, CORS, migraciones, routers
 │   │   ├── config.py               # Settings con pydantic-settings (.env)
 │   │   ├── database.py             # SQLAlchemy async engine (SQLite o PostgreSQL)
 │   │   ├── seed.py                 # Seed del catalogo de productos
 │   │   ├── models/
 │   │   │   ├── user.py             # Modelo User (auth)
-│   │   │   ├── product.py          # Modelo Product
-│   │   │   └── sale.py             # Modelos Sale + SaleItem
+│   │   │   ├── product.py          # Modelo Product (con image_url)
+│   │   │   ├── sale.py             # Modelos Sale + SaleItem (con cancelled, shift_id)
+│   │   │   └── shift.py            # Modelo Shift (apertura/cierre de caja)
 │   │   ├── schemas/
 │   │   │   ├── auth.py             # LoginRequest, TokenResponse, UserCreate, UserResponse
-│   │   │   ├── product.py          # ProductCreate, ProductUpdate, ProductResponse
-│   │   │   ├── sale.py             # Schemas de ventas
-│   │   │   └── sync.py             # Schemas del payload de sincronizacion
+│   │   │   ├── product.py          # ProductCreate, ProductUpdate, ProductResponse (validados)
+│   │   │   ├── sale.py             # Schemas de ventas (con validadores gt=0, ge=0)
+│   │   │   ├── sync.py             # SyncRequest/Response (con failed_uuids)
+│   │   │   └── shift.py            # ShiftOpen, ShiftClose, ShiftResponse
 │   │   ├── routers/
-│   │   │   ├── auth.py             # POST /login, GET /me, GET/POST /users, dependencias JWT
-│   │   │   ├── products.py         # GET lista, POST crear, PUT editar, PUT stock
-│   │   │   ├── sales.py            # GET historial (filtrado por rol)
+│   │   │   ├── auth.py             # POST /login, GET /me, CRUD usuarios, dependencias JWT
+│   │   │   ├── products.py         # CRUD productos + subida de imagenes
+│   │   │   ├── sales.py            # Crear/listar/anular ventas (con row-level locking)
 │   │   │   ├── reports.py          # GET resumen diario (solo admin)
-│   │   │   └── sync.py             # POST sync batch de ventas offline
-│   │   └── services/
-│   │       ├── auth_service.py     # hash_password, verify_password, create_token, decode_token
-│   │       ├── email_service.py    # Gmail SMTP + template HTML
-│   │       ├── report_service.py   # Generacion de datos del resumen diario
-│   │       └── scheduler.py        # APScheduler cron (9PM Mexico)
-│   ├── .python-version             # Fija Python 3.12 en Render
+│   │   │   ├── sync.py             # POST sync batch con failed reporting
+│   │   │   └── shifts.py           # Abrir/cerrar turnos, historial
+│   │   ├── services/
+│   │   │   ├── auth_service.py     # hash, verify, create_token, decode_token
+│   │   │   ├── email_service.py    # Gmail SMTP + template HTML
+│   │   │   ├── report_service.py   # Datos del resumen diario (excluye anuladas)
+│   │   │   └── scheduler.py        # APScheduler cron (9PM Mexico)
+│   │   └── uploads/products/       # Imagenes subidas de productos
+│   ├── .python-version
 │   └── requirements.txt
 ├── frontend/
-│   ├── public/
-│   │   └── icons/
-│   │       ├── logo.png            # Logo Sweet Home (login page)
-│   │       ├── icon-192.svg        # Icono PWA 192x192
-│   │       └── icon-512.svg        # Icono PWA 512x512
+│   ├── public/icons/               # Logo + iconos PWA
 │   ├── src/
-│   │   ├── App.tsx                 # Router + AuthProvider + roles
+│   │   ├── App.tsx                 # Router + AuthProvider + roles + sync indicator
 │   │   ├── contexts/
 │   │   │   └── AuthContext.tsx     # Auth state, login/logout, token en localStorage
 │   │   ├── db/
-│   │   │   ├── database.ts         # Schema Dexie.js (products, sales, saleItems)
-│   │   │   └── sync.ts             # Logica de sincronizacion con backend
+│   │   │   ├── database.ts         # Schema Dexie.js v4 (products con image_data)
+│   │   │   └── sync.ts             # Sincronizacion + cache de imagenes offline
 │   │   ├── hooks/
-│   │   │   ├── useOnlineStatus.ts  # Detecta online/offline + auto-sync (solo autenticado)
-│   │   │   └── useProducts.ts      # Hook para obtener productos
+│   │   │   └── useOnlineStatus.ts  # Online/offline + sync con useRef lock + error state
 │   │   ├── services/
-│   │   │   └── api.ts              # Fetch wrapper con JWT + manejo 401
+│   │   │   └── api.ts              # Fetch wrapper con JWT + check expiry pre-request
 │   │   ├── pages/
 │   │   │   ├── Login.tsx           # Pantalla de inicio de sesion
-│   │   │   ├── RegisterSale.tsx    # Pantalla principal: registrar venta rapido
-│   │   │   ├── Inventory.tsx       # Gestionar stock + crear/editar productos (admin)
-│   │   │   ├── SalesHistory.tsx    # "Mis Ventas" (empleado) / "Historial" (admin)
-│   │   │   ├── DailySummary.tsx    # Resumen del dia (admin)
+│   │   │   ├── RegisterSale.tsx    # Registrar venta (con aviso de turno)
+│   │   │   ├── Inventory.tsx       # Stock + crear/editar productos + subida de imagenes
+│   │   │   ├── SalesHistory.tsx    # "Mis Ventas" / "Historial" + anulacion
+│   │   │   ├── DailySummary.tsx    # Resumen con selector de fecha + imprimir
 │   │   │   ├── Users.tsx           # Gestion de usuarios (admin)
-│   │   │   └── Catalog.tsx         # Ver catalogo de productos
+│   │   │   └── Shifts.tsx          # Abrir/cerrar turno + historial (admin)
 │   │   ├── components/
-│   │   │   ├── BottomNav.tsx       # Navegacion inferior (tabs segun rol)
-│   │   │   ├── ProductGrid.tsx     # Grid de productos (touch targets grandes)
-│   │   │   ├── SyncIndicator.tsx   # Indicador de estado online/sync
+│   │   │   ├── BottomNav.tsx       # Navegacion inferior (6 tabs segun rol)
+│   │   │   ├── ProductGrid.tsx     # Grid con imagenes + fallback offline
+│   │   │   ├── SyncIndicator.tsx   # Estado: online/offline/syncing/error + pendientes
 │   │   │   └── Toast.tsx           # Notificaciones toast
 │   │   └── styles/
-│   │       ├── global.css          # Reset + variables CSS + tema
-│   │       ├── pages.css           # Estilos por pagina (login, product sheet, etc.)
-│   │       └── components.css      # Estilos de componentes
+│   │       ├── global.css          # Reset + variables CSS + tema + print styles
+│   │       ├── pages.css           # Estilos por pagina (login, venta, turnos, etc.)
+│   │       └── components.css      # Estilos de componentes (grid, nav, sync bar)
 │   ├── index.html
-│   ├── vite.config.ts
+│   ├── vite.config.ts              # PWA config + sourcemap disabled
 │   └── package.json
 ├── .gitignore
 └── README.md
@@ -373,7 +377,7 @@ Authorization: Bearer <token>
 
 | Metodo | Ruta | Auth | Descripcion |
 |--------|------|------|-------------|
-| POST | `/api/auth/login` | — | Login. Body: `{"username": "", "password": ""}`. Retorna `{token, user_id, username, role}` |
+| POST | `/api/auth/login` | — | Login. Retorna `{token, user_id, username, role}` |
 | GET | `/api/auth/me` | Usuario | Datos del usuario autenticado |
 | GET | `/api/auth/users` | Admin | Listar todos los usuarios |
 | POST | `/api/auth/users` | Admin | Crear usuario. Body: `{username, password, role}` |
@@ -384,35 +388,48 @@ Authorization: Bearer <token>
 | Metodo | Ruta | Auth | Descripcion |
 |--------|------|------|-------------|
 | GET | `/api/products` | Usuario | Listar productos. Query: `?active_only=true` |
-| POST | `/api/products` | Admin | Crear producto. Body: `{name, price, stock, low_stock_threshold}` |
-| PUT | `/api/products/{id}` | Admin | Editar producto. Body: `{name?, price?, low_stock_threshold?, active?}` |
-| PUT | `/api/products/{id}/stock` | Admin | Actualizar stock. Body: `{"stock": 10}` |
+| POST | `/api/products` | Admin | Crear producto |
+| PUT | `/api/products/{id}` | Admin | Editar producto (nombre, precio, umbral, imagen, activo) |
+| PUT | `/api/products/{id}/stock` | Admin | Actualizar stock (requiere conexion) |
 | GET | `/api/products/low-stock` | Usuario | Productos con stock bajo el umbral |
+| POST | `/api/products/upload-image` | Admin | Subir imagen (JPG/PNG/WebP/GIF, max 5 MB) |
 
 ### Ventas
 
 | Metodo | Ruta | Auth | Descripcion |
 |--------|------|------|-------------|
-| GET | `/api/sales` | Usuario | Historial. Admin ve todas, empleado solo las suyas. Query: `?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&limit=50` |
+| POST | `/api/sales` | Usuario | Crear venta (valida total vs items, verifica stock con lock) |
+| GET | `/api/sales` | Usuario | Historial. Admin ve todas, empleado solo las suyas |
+| GET | `/api/sales/count` | Usuario | Contar ventas con filtros |
+| DELETE | `/api/sales/{id}` | Admin | Anular venta (soft delete, restaura stock) |
+
+### Turnos
+
+| Metodo | Ruta | Auth | Descripcion |
+|--------|------|------|-------------|
+| POST | `/api/shifts/open` | Usuario | Abrir turno. Body: `{opening_cash: 500}` |
+| POST | `/api/shifts/{id}/close` | Usuario | Cerrar turno. Body: `{closing_cash: 2300, notes?}` |
+| GET | `/api/shifts/me/current` | Usuario | Turno abierto actual (o null) |
+| GET | `/api/shifts` | Admin | Historial de turnos. Query: `?date_from&date_to&user_id` |
 
 ### Sincronizacion
 
 | Metodo | Ruta | Auth | Descripcion |
 |--------|------|------|-------------|
-| POST | `/api/sync` | Usuario | Enviar batch de ventas offline. Retorna UUIDs sincronizados + productos actualizados |
+| POST | `/api/sync` | Usuario | Batch de ventas offline. Retorna `{synced_uuids, failed, products}` |
 
 ### Reportes (Admin)
 
 | Metodo | Ruta | Auth | Descripcion |
 |--------|------|------|-------------|
 | GET | `/api/reports/daily` | Admin | Resumen del dia. Query: `?date=YYYY-MM-DD` |
-| POST | `/api/reports/send-test` | Admin | Enviar correo de prueba con datos de hoy |
+| POST | `/api/reports/send-test` | Admin | Enviar correo de prueba |
 
 ### Cron Externo
 
 | Metodo | Ruta | Auth | Descripcion |
 |--------|------|------|-------------|
-| POST | `/api/cron/daily-report` | Header `Authorization: Bearer {CRON_SECRET}` | Dispara envio de email diario |
+| POST | `/api/cron/daily-report` | Bearer CRON_SECRET | Dispara envio de email diario |
 
 ---
 
@@ -436,11 +453,6 @@ Authorization: Bearer <token>
 | `CORS_ORIGINS` | `http://localhost:5173` | URLs permitidas (separadas por coma) |
 | `CRON_SECRET` | `""` | Token Bearer para el endpoint de cron externo |
 
-**Generar JWT_SECRET seguro:**
-```bash
-python -c "import secrets; print(secrets.token_hex(32))"
-```
-
 ### Frontend (`frontend/.env`)
 
 | Variable | Default | Descripcion |
@@ -457,7 +469,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 - Node.js 18+
 - npm 9+
 
-### 1. Clonar el repositorio
+### 1. Clonar
 
 ```bash
 git clone https://github.com/ArturoFrancoMozqueda/sweet_home_pos.git
@@ -468,24 +480,18 @@ cd sweet_home_pos
 
 ```bash
 cd backend
-
-# Crear entorno virtual con Python 3.12
 python -m venv venv
 
 # Activar (Windows PowerShell)
 .\venv\Scripts\Activate.ps1
-
 # Activar (Linux/Mac)
 source venv/bin/activate
 
-# Instalar dependencias
 pip install -r requirements.txt
-
-# Crear archivo de variables de entorno
 cp .env.example .env
 ```
 
-Editar `backend/.env` — para desarrollo local lo minimo es poner `ADMIN_PASSWORD`:
+Editar `backend/.env` — minimo poner `ADMIN_PASSWORD`:
 ```
 ADMIN_PASSWORD=tupassword
 ```
@@ -513,105 +519,53 @@ npm run dev
 
 ### 5. Acceder
 
-- **App:** http://localhost:5173 → login con usuario `admin` y la contrasena que pusiste en `.env`
+- **App:** http://localhost:5173
 - **API Docs:** http://localhost:8000/docs
-
----
-
-## Setup Produccion (Deploy Gratuito)
-
-### Paso 1: Neon PostgreSQL (Base de datos)
-
-1. Crea cuenta en **https://neon.tech**
-2. Nuevo proyecto → conectar → copia el connection string
-3. Convierte al formato asyncpg:
-   ```
-   postgresql+asyncpg://usuario:password@host/db?ssl=require
-   ```
-
-### Paso 2: Render.com (Backend)
-
-1. Crea cuenta en **https://render.com** → conecta GitHub
-2. **New → Web Service** → selecciona el repo
-
-   | Campo | Valor |
-   |-------|-------|
-   | Root Directory | `backend` |
-   | Build Command | `pip install -r requirements.txt` |
-   | Start Command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-   | Instance Type | Free |
-
-3. Variables de entorno en Render:
-
-   | Key | Value |
-   |-----|-------|
-   | `DATABASE_URL` | URL de Neon |
-   | `JWT_SECRET` | string aleatorio largo (genera con python secrets) |
-   | `ADMIN_USERNAME` | `admin` |
-   | `ADMIN_PASSWORD` | tu contrasena segura |
-   | `GMAIL_USER` | tu correo Gmail |
-   | `GMAIL_APP_PASSWORD` | app password de Gmail |
-   | `EMAIL_RECIPIENT` | correo que recibe el reporte |
-   | `CORS_ORIGINS` | URL de Vercel (se agrega en paso 4) |
-   | `CRON_SECRET` | string aleatorio para el cron |
-
-4. Deploy → verifica: `https://tu-api.onrender.com/api/health`
-
-### Paso 3: Vercel (Frontend)
-
-1. Crea cuenta en **https://vercel.com** → conecta GitHub
-2. **Add New → Project** → importa el repo
-3. Root Directory: `frontend`
-4. Variable de entorno: `VITE_API_URL = https://tu-api.onrender.com`
-5. Deploy
-
-### Paso 4: Conectar CORS
-
-En Render → Environment → `CORS_ORIGINS = https://tu-app.vercel.app`
-
-### Paso 5: cron-job.org (Correo diario)
-
-1. Crea cuenta en **https://cron-job.org**
-2. Nuevo cron job:
-   - URL: `https://tu-api.onrender.com/api/cron/daily-report`
-   - Metodo: POST
-   - Schedule: 21:00 `America/Mexico_City`
-   - Header: `Authorization: Bearer TU_CRON_SECRET`
 
 ---
 
 ## Como Usar la App
 
 ### Iniciar sesion
-1. Abre la app → pantalla de login
-2. Ingresa usuario y contrasena
-3. El admin ve todas las secciones; el empleado ve Venta, Inventario y Mis Ventas
-4. Para cerrar sesion: ir a "Mis Ventas" (o "Historial") → boton "Cerrar sesion"
+1. Abre la app → login con usuario y contrasena
+2. Admin ve: Venta, Inventario, Historial, Turnos, Resumen, Usuarios
+3. Empleado ve: Venta, Inventario, Mis Ventas, Turnos
+
+### Abrir turno
+1. Ve a "Turnos"
+2. Ingresa la cantidad de dinero en caja
+3. Toca "Abrir Turno"
+4. En la pantalla de Venta aparecera un aviso si no tienes turno abierto
 
 ### Registrar una venta
-1. Pantalla "Venta" (principal)
-2. Toca un producto para agregarlo al carrito
-3. Toca de nuevo para aumentar cantidad (o usa +/-)
-4. Selecciona metodo de pago (Efectivo o Transferencia)
-5. Toca "Registrar $XX"
+1. Pantalla "Venta" → toca productos para agregar al carrito
+2. Usa +/- para ajustar cantidades
+3. Selecciona metodo de pago (Efectivo o Transferencia)
+4. Toca "Registrar $XX"
+5. La venta se vincula automaticamente a tu turno abierto
+
+### Cerrar turno
+1. Ve a "Turnos" → tu turno activo muestra el tiempo transcurrido
+2. Toca "Cerrar Turno"
+3. Cuenta el dinero en caja e ingresa el monto
+4. El sistema muestra: esperado vs contado y la varianza
+5. Verde = cuadra, Rojo = faltante, Naranja = sobrante
+
+### Anular una venta (admin)
+1. Ve a "Historial" → encuentra la venta
+2. Toca el icono de basura → confirma "Si"
+3. La venta se marca como anulada y el stock se restaura
 
 ### Gestionar productos (admin)
 1. Ve a "Inventario"
-2. **Nuevo producto:** boton "+ Nuevo" arriba a la derecha
-3. **Editar producto:** icono de lapiz en cada fila → cambia nombre, precio, umbral o desactivalo
-4. Ajusta stock con los botones +/- o editando el numero directamente
+2. **Nuevo:** boton "+ Nuevo" → llena nombre, precio, stock, imagen
+3. **Editar:** icono de lapiz → cambia datos o sube nueva imagen
+4. Ajusta stock con +/- (requiere conexion)
 
 ### Ver resumen del dia (admin)
-- Pantalla "Resumen" → total vendido, numero de ventas, top productos, desglose por metodo de pago
-
-### Ver historial
-- Empleado: "Mis Ventas" → solo sus propias ventas
-- Admin: "Historial" → todas las ventas, filtrables por fecha
-
-### Gestionar usuarios (admin)
-1. Pantalla "Usuarios"
-2. Crear empleado con usuario + contrasena
-3. Activar/desactivar empleados existentes
+- "Resumen" → total vendido, top productos, desglose por pago
+- Usa el selector de fecha para ver dias anteriores
+- Boton "Imprimir" genera version imprimible
 
 ### Instalar como app (PWA)
 - **Android (Chrome):** Menu → "Agregar a pantalla de inicio"
@@ -622,10 +576,14 @@ En Render → Environment → `CORS_ORIGINS = https://tu-app.vercel.app`
 ## Proximos Pasos
 
 - Sistema de descuentos (porcentaje o monto fijo por venta)
+- Reembolsos parciales (devolver items individuales)
+- Categorias de productos con tabs de filtro
+- Busqueda de productos en la pantalla de venta
+- Generacion de recibos (compartir/imprimir)
 - Reportes semanales y mensuales
-- Categorias de productos
-- Exportacion a CSV/Excel de ventas e inventario
-- Cancelacion/devolucion de ventas
+- Exportacion a CSV de ventas e inventario
+- Precio de costo y margen de ganancia por producto
+- Pedidos anticipados (pasteles, catering)
 - Cambio de contrasena desde la app
+- Programa de lealtad para clientes
 - Alembic para migraciones de BD formales
-- Backup automatico de BD
