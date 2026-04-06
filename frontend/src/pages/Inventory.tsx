@@ -135,8 +135,8 @@ export function Inventory() {
         showToast("Producto actualizado");
       }
       closeForm();
-    } catch {
-      setFormError("Error al guardar el producto");
+    } catch (err: any) {
+      setFormError(err?.message || "Error al guardar el producto");
     } finally {
       setFormSaving(false);
     }

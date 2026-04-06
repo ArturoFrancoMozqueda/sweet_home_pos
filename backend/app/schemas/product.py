@@ -18,9 +18,9 @@ class ProductCreate(ProductBase):
 
 
 class ProductUpdate(BaseModel):
-    name: Optional[str] = None
-    price: Optional[float] = None
-    low_stock_threshold: Optional[int] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    price: Optional[float] = Field(default=None, gt=0)
+    low_stock_threshold: Optional[int] = Field(default=None, ge=0)
     active: Optional[bool] = None
     image_url: Optional[str] = None
 
