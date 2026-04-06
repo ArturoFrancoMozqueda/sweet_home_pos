@@ -8,6 +8,23 @@ async function request(path: string, options: RequestInit = {}) {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   const token = getStoredToken();
+
+  // Check token expiry before making the request
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        localStorage.removeItem("sweet_home_token");
+        localStorage.removeItem("sweet_home_user");
+        window.location.reload();
+        throw new Error("Sesión expirada");
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message === "Sesión expirada") throw e;
+      // Malformed token — will fail on server anyway
+    }
+  }
+
   const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
   try {
