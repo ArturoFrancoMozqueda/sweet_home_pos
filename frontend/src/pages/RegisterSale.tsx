@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type DBProduct } from "../db/database";
 import { syncToServer } from "../db/sync";
 import { ProductGrid } from "../components/ProductGrid";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../contexts/AuthContext";
+import { api } from "../services/api";
 import type { CartItem } from "../types";
 
 export function RegisterSale() {
@@ -12,8 +14,18 @@ export function RegisterSale() {
   const [paymentMethod, setPaymentMethod] = useState<"efectivo" | "transferencia" | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [hasShift, setHasShift] = useState<boolean | null>(null); // null = loading
   const { showToast } = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // Check if user has an open shift
+  useEffect(() => {
+    if (!navigator.onLine) { setHasShift(true); return; } // Allow offline sales
+    api.get("/api/shifts/me/current")
+      .then((data) => setHasShift(data !== null))
+      .catch(() => setHasShift(true)); // On error, don't block sales
+  }, []);
 
   const products = useLiveQuery(() => db.products.orderBy("name").toArray(), [], []);
 
@@ -110,6 +122,21 @@ export function RegisterSale() {
       {/* ── Catalog zone — scrollable ── */}
       <div className="sale-catalog">
         <h1 className="page-title">Registrar Venta</h1>
+
+        {hasShift === false && (
+          <div className="card" style={{ background: "var(--warning-soft)", marginBottom: 12, textAlign: "center" }}>
+            <p style={{ fontWeight: 600, color: "#92400e", fontSize: "0.9rem", marginBottom: 8 }}>
+              No tienes un turno abierto
+            </p>
+            <button
+              className="btn btn-primary"
+              style={{ padding: "8px 20px", minHeight: "auto", fontSize: "0.85rem" }}
+              onClick={() => navigate("/shifts")}
+            >
+              Abrir Turno
+            </button>
+          </div>
+        )}
 
         {products && products.length > 0 ? (
           <ProductGrid products={products} cart={cart} onAddToCart={addToCart} />
