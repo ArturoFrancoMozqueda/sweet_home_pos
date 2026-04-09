@@ -1,12 +1,16 @@
 import { db, type DBProduct } from "./database";
 import { api } from "../services/api";
+import { getStoredToken } from "../contexts/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 async function fetchImageAsBase64(url: string): Promise<string | undefined> {
   try {
     const fullUrl = url.startsWith("http") ? url : `${API_URL}${url}`;
-    const res = await fetch(fullUrl);
+    const token = getStoredToken();
+    const res = await fetch(fullUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) return undefined;
     const blob = await res.blob();
     return new Promise((resolve) => {
