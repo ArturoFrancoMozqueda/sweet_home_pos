@@ -1,12 +1,13 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import UPLOADS_DIR
 from app.database import get_db
 from app.models.product import Product
+from app.models.product_image import ProductImage
 from app.models.user import User
 from app.routers.auth import get_current_user, require_admin
 from app.schemas.product import ProductCreate, ProductResponse, ProductStockUpdate, ProductUpdate
@@ -88,6 +89,8 @@ async def get_low_stock(
     return result.scalars().all()
 
 
+# ── Image upload & serving (stored in PostgreSQL) ──
+
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_SIZE = 5 * 1024 * 1024  # 5 MB
 
@@ -96,6 +99,7 @@ MAX_SIZE = 5 * 1024 * 1024  # 5 MB
 async def upload_image(
     file: UploadFile,
     _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
 ):
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Solo imágenes JPG, PNG, WebP o GIF")
@@ -104,9 +108,32 @@ async def upload_image(
     if len(contents) > MAX_SIZE:
         raise HTTPException(status_code=400, detail="Imagen demasiado grande (máx 5 MB)")
 
-    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "jpg"
-    filename = f"{uuid.uuid4().hex}.{ext}"
-    filepath = UPLOADS_DIR / filename
-    filepath.write_bytes(contents)
+    image_uuid = uuid.uuid4().hex
+    image = ProductImage(
+        uuid=image_uuid,
+        content_type=file.content_type or "image/jpeg",
+        data=contents,
+    )
+    db.add(image)
+    await db.commit()
 
-    return {"url": f"/uploads/products/{filename}"}
+    return {"url": f"/api/products/images/{image_uuid}"}
+
+
+@router.get("/images/{image_uuid}")
+async def get_image(
+    image_uuid: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ProductImage).where(ProductImage.uuid == image_uuid)
+    )
+    image = result.scalars().first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
+    return Response(
+        content=image.data,
+        media_type=image.content_type,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )

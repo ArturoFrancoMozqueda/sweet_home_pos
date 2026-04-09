@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from app.config import UPLOADS_DIR, settings
@@ -120,6 +119,16 @@ async def lifespan(app: FastAPI):
         await conn.execute(text(
             "ALTER TABLE products ADD COLUMN IF NOT EXISTS cost_price NUMERIC(10,2)"
         ))
+    # Create product_images table for persistent image storage
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS product_images (
+                uuid VARCHAR(36) PRIMARY KEY,
+                content_type VARCHAR(50) NOT NULL,
+                data BYTEA NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
     async with async_session() as db:
         await seed_products(db)
     await _seed_admin()
@@ -154,7 +163,7 @@ app.include_router(reports.router)
 app.include_router(sync.router)
 app.include_router(shifts.router)
 
-app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR.parent), name="uploads")
+# Images are now stored in PostgreSQL and served via /api/products/images/{uuid}
 
 
 @app.get("/api/health")
