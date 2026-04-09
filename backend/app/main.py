@@ -129,6 +129,11 @@ async def lifespan(app: FastAPI):
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """))
+    # Clean up old /uploads/ image URLs that no longer exist (ephemeral filesystem)
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            "UPDATE products SET image_url = NULL WHERE image_url LIKE '/uploads/%'"
+        ))
     async with async_session() as db:
         await seed_products(db)
     await _seed_admin()
