@@ -249,6 +249,90 @@
   letter-spacing: 0.02em;
 }
 
+/* ── Cash Change Calculator ───────────────────────────────── */
+
+.cash-calculator {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.cash-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.cash-input-row label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-light);
+  white-space: nowrap;
+}
+
+.cash-input-row input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 1.1rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-align: right;
+  background: var(--bg-card);
+  color: var(--text);
+}
+
+.cash-input-row input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.cash-quick-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.cash-quick-buttons button {
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--bg-accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.cash-quick-buttons button:active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.cash-change {
+  text-align: center;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.cash-change.ok {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.cash-change.short {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 /* ── Daily Summary ─────────────────────────────────────────── */
 .summary-hero {
   background: var(--primary-gradient);

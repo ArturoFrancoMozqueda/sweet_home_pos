@@ -14,6 +14,7 @@ export function RegisterSale() {
   const [paymentMethod, setPaymentMethod] = useState<"efectivo" | "transferencia" | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [amountPaid, setAmountPaid] = useState("");
   const [hasShift, setHasShift] = useState<boolean | null>(null); // null = loading
   const { showToast } = useToast();
   const { user } = useAuth();
@@ -67,6 +68,8 @@ export function RegisterSale() {
   };
 
   const total = cart.reduce((sum, c) => sum + c.product.price * c.quantity, 0);
+  const paidNum = parseFloat(amountPaid) || 0;
+  const change = paidNum - total;
 
   const handleRegister = async () => {
     if (cart.length === 0 || !paymentMethod) return;
@@ -104,7 +107,9 @@ export function RegisterSale() {
 
       setCart([]);
       setPaymentMethod(null);
-      showToast(`Venta registrada: $${total}`);
+      const changeMsg = paymentMethod === "efectivo" && change > 0 ? ` · Cambio: $${change.toFixed(2)}` : "";
+      setAmountPaid("");
+      showToast(`Venta registrada: $${total}${changeMsg}`);
 
       if (navigator.onLine) {
         syncToServer().catch(() => {});
@@ -206,25 +211,53 @@ export function RegisterSale() {
             <div className="payment-section">
               <button
                 className={`payment-btn ${paymentMethod === "efectivo" ? "selected" : ""}`}
-                onClick={() => setPaymentMethod("efectivo")}
+                onClick={() => { setPaymentMethod("efectivo"); setAmountPaid(""); }}
               >
                 <span className="payment-icon">💵</span>
                 Efectivo
               </button>
               <button
                 className={`payment-btn ${paymentMethod === "transferencia" ? "selected" : ""}`}
-                onClick={() => setPaymentMethod("transferencia")}
+                onClick={() => { setPaymentMethod("transferencia"); setAmountPaid(""); }}
               >
                 <span className="payment-icon">📱</span>
                 Transferencia
               </button>
             </div>
 
+            {/* Cash change calculator — only for efectivo */}
+            {paymentMethod === "efectivo" && (
+              <div className="cash-calculator">
+                <div className="cash-input-row">
+                  <label>Recibido</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    placeholder="$0.00"
+                  />
+                </div>
+                <div className="cash-quick-buttons">
+                  {[20, 50, 100, 200, 500].map((d) => (
+                    <button key={d} type="button" onClick={() => setAmountPaid(String(d))}>${d}</button>
+                  ))}
+                </div>
+                {paidNum > 0 && (
+                  <div className={`cash-change ${change >= 0 ? "ok" : "short"}`}>
+                    {change >= 0
+                      ? `Cambio: $${change.toFixed(2)}`
+                      : `Falta: $${Math.abs(change).toFixed(2)}`}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Register button */}
             <button
               className="btn btn-primary btn-block register-btn"
               onClick={handleRegister}
-              disabled={!paymentMethod || saving}
+              disabled={!paymentMethod || saving || (paymentMethod === "efectivo" && paidNum < total)}
             >
               {saving ? "Guardando..." : `Registrar $${total}`}
             </button>
