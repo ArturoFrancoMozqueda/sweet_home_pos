@@ -135,5 +135,8 @@ async def get_image(
     return Response(
         content=image.data,
         media_type=image.content_type,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "Access-Control-Allow-Origin": "*",
+        },
     )
