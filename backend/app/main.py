@@ -129,14 +129,6 @@ async def lifespan(app: FastAPI):
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """))
-    # One-time cleanup: clear old /uploads/ URLs that no longer exist
-    # Safe to run multiple times — once all are cleared, this is a no-op
-    async with engine.begin() as conn:
-        result = await conn.execute(text(
-            "UPDATE products SET image_url = NULL WHERE image_url LIKE '/uploads/%'"
-        ))
-        if result.rowcount > 0:
-            logger.info(f"Cleared {result.rowcount} stale /uploads/ image URLs")
     async with async_session() as db:
         await seed_products(db)
     await _seed_admin()
