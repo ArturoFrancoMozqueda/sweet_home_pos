@@ -86,10 +86,18 @@ export async function syncToServer(): Promise<SyncResult> {
           .where("sale_uuid")
           .equals(sale.client_uuid)
           .toArray();
+        // Defensive: older rows from a pre-v6 upgrade should already have been
+        // migrated, but fall back just in case to avoid sending an invalid payload.
+        const payments =
+          Array.isArray(sale.payments) && sale.payments.length > 0
+            ? sale.payments
+            : [{ method: sale.payment_method, amount: sale.total }];
         return {
           client_uuid: sale.client_uuid,
           total: sale.total,
           payment_method: sale.payment_method,
+          payments,
+          discount_amount: sale.discount_amount ?? 0,
           created_at: sale.created_at,
           items: items.map((item) => ({
             product_id: item.product_id,

@@ -22,11 +22,19 @@ export interface DBSaleItem {
   subtotal: number;
 }
 
+export interface DBPayment {
+  method: "efectivo" | "transferencia";
+  amount: number;
+}
+
 export interface DBSale {
   id?: number;
   client_uuid: string;
   total: number;
+  // "efectivo" | "transferencia" | "mixto" — derived from payments[] for display.
   payment_method: string;
+  payments: DBPayment[];
+  discount_amount: number;
   created_at: string;
   synced: number; // 0 = pending, 1 = synced, 2 = server rejected (no auto-retry)
   user_id?: number;
@@ -69,6 +77,29 @@ class SweetHomeDB extends Dexie {
       sales: "++id, client_uuid, created_at, synced, user_id",
       saleItems: "++id, sale_uuid, product_id",
     });
+    // Version 6: payments[] + discount_amount on sales (split-payment + discount support).
+    // Migrate existing rows: derive payments from the old payment_method, zero discount.
+    this.version(6)
+      .stores({
+        products: "id, name, active",
+        sales: "++id, client_uuid, created_at, synced, user_id",
+        saleItems: "++id, sale_uuid, product_id",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("sales")
+          .toCollection()
+          .modify((sale: any) => {
+            if (!Array.isArray(sale.payments) || sale.payments.length === 0) {
+              sale.payments = [
+                { method: sale.payment_method, amount: sale.total },
+              ];
+            }
+            if (typeof sale.discount_amount !== "number") {
+              sale.discount_amount = 0;
+            }
+          });
+      });
   }
 }
 

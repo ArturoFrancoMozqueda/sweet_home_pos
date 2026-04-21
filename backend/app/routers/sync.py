@@ -8,10 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.product import Product
-from app.models.sale import Sale, SaleItem
+from app.models.sale import Sale, SaleItem, SalePayment
 from app.models.shift import Shift
 from app.models.user import User
 from app.routers.auth import get_current_user
+from app.routers.sales import derive_payment_method, resolve_payments
 from app.schemas.sync import SyncFailure, SyncRequest, SyncResponse
 
 logger = logging.getLogger(__name__)
@@ -43,12 +44,13 @@ async def sync_sales(
             synced_uuids.append(sale_data.client_uuid)
             continue
 
-        # Validate total matches items
-        expected_total = sum(item.subtotal for item in sale_data.items)
-        if abs(sale_data.total - expected_total) > 0.01:
+        # Validate totals, payments, and discount in one pass via the shared helper.
+        try:
+            payments = resolve_payments(sale_data)
+        except ValueError as e:
             failed.append(SyncFailure(
                 uuid=sale_data.client_uuid,
-                reason=f"Total no coincide (esperado: {expected_total:.2f}, recibido: {sale_data.total:.2f})",
+                reason=str(e),
             ))
             continue
 
@@ -60,12 +62,16 @@ async def sync_sales(
                 sale = Sale(
                     client_uuid=sale_data.client_uuid,
                     total=sale_data.total,
-                    payment_method=sale_data.payment_method,
+                    discount_amount=sale_data.discount_amount,
+                    payment_method=derive_payment_method(payments),
                     created_at=sale_data.created_at.replace(tzinfo=None),
                     synced_at=datetime.utcnow(),
                     user_id=current_user.id,
                     shift_id=current_shift.id if current_shift else None,
                 )
+
+                for p in payments:
+                    sale.payments.append(SalePayment(method=p.method, amount=p.amount))
 
                 for item_data in sale_data.items:
                     sale_item = SaleItem(

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
-import { db, type DBProduct } from "../db/database";
+import { db, type DBProduct, type DBPayment } from "../db/database";
 import { syncToServer } from "../db/sync";
 import { ProductGrid } from "../components/ProductGrid";
 import { useToast } from "../components/Toast";
@@ -9,13 +9,16 @@ import { useAuth, SALE_DRAFT_KEY } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import type { CartItem } from "../types";
 
-type PaymentMethod = "efectivo" | "transferencia" | null;
-
 interface SaleDraft {
   user_id?: number;
   cart: CartItem[];
-  paymentMethod: PaymentMethod;
+  discountInput: string;
+  efectivoActive: boolean;
+  transferActive: boolean;
+  efectivoInput: string;
   amountPaid: string;
+  // Legacy field, read for backward compat when restoring a pre-split-payment draft.
+  paymentMethod?: "efectivo" | "transferencia" | null;
 }
 
 function loadSaleDraft(userId: number | undefined): SaleDraft | null {
@@ -23,12 +26,26 @@ function loadSaleDraft(userId: number | undefined): SaleDraft | null {
     const raw = sessionStorage.getItem(SALE_DRAFT_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SaleDraft;
-    // Discard a draft left by a previous user to avoid cross-session cart leaks.
     if (parsed.user_id !== userId) return null;
+    // Translate legacy single-method drafts into the new toggle model.
+    if (
+      parsed.paymentMethod !== undefined &&
+      parsed.efectivoActive === undefined &&
+      parsed.transferActive === undefined
+    ) {
+      parsed.efectivoActive = parsed.paymentMethod === "efectivo";
+      parsed.transferActive = parsed.paymentMethod === "transferencia";
+      parsed.discountInput = parsed.discountInput ?? "";
+      parsed.efectivoInput = parsed.efectivoInput ?? "";
+    }
     return parsed;
   } catch {
     return null;
   }
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 export function RegisterSale() {
@@ -36,36 +53,43 @@ export function RegisterSale() {
   const initialDraft = loadSaleDraft(user?.id);
 
   const [cart, setCart] = useState<CartItem[]>(initialDraft?.cart ?? []);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(initialDraft?.paymentMethod ?? null);
+  const [discountInput, setDiscountInput] = useState(initialDraft?.discountInput ?? "");
+  const [efectivoActive, setEfectivoActive] = useState(initialDraft?.efectivoActive ?? false);
+  const [transferActive, setTransferActive] = useState(initialDraft?.transferActive ?? false);
+  const [efectivoInput, setEfectivoInput] = useState(initialDraft?.efectivoInput ?? "");
+  const [amountPaid, setAmountPaid] = useState(initialDraft?.amountPaid ?? "");
   const [saving, setSaving] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [amountPaid, setAmountPaid] = useState(initialDraft?.amountPaid ?? "");
-  const [hasShift, setHasShift] = useState<boolean | null>(null); // null = loading
+  const [hasShift, setHasShift] = useState<boolean | null>(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
 
-  // Persist the in-flight sale so a 401-triggered reload, crash, or accidental nav
-  // doesn't lose what the cashier already rang up.
   useEffect(() => {
     try {
       if (cart.length === 0) {
         sessionStorage.removeItem(SALE_DRAFT_KEY);
       } else {
-        const draft: SaleDraft = { user_id: user?.id, cart, paymentMethod, amountPaid };
+        const draft: SaleDraft = {
+          user_id: user?.id,
+          cart,
+          discountInput,
+          efectivoActive,
+          transferActive,
+          efectivoInput,
+          amountPaid,
+        };
         sessionStorage.setItem(SALE_DRAFT_KEY, JSON.stringify(draft));
       }
     } catch {
-      // sessionStorage may be unavailable or full — fail silently, losing draft
-      // is not worse than today's behavior.
+      // sessionStorage unavailable/full — non-fatal.
     }
-  }, [cart, paymentMethod, amountPaid, user?.id]);
+  }, [cart, discountInput, efectivoActive, transferActive, efectivoInput, amountPaid, user?.id]);
 
-  // Check if user has an open shift
   useEffect(() => {
-    if (!navigator.onLine) { setHasShift(true); return; } // Allow offline sales
+    if (!navigator.onLine) { setHasShift(true); return; }
     api.get("/api/shifts/me/current")
       .then((data) => setHasShift(data !== null))
-      .catch(() => setHasShift(true)); // On error, don't block sales
+      .catch(() => setHasShift(true));
   }, []);
 
   const products = useLiveQuery(() => db.products.orderBy("name").toArray(), [], []);
@@ -107,22 +131,86 @@ export function RegisterSale() {
     );
   };
 
-  const total = cart.reduce((sum, c) => sum + c.product.price * c.quantity, 0);
-  const paidNum = parseFloat(amountPaid) || 0;
-  const change = paidNum - total;
+  const subtotal = cart.reduce((sum, c) => sum + c.product.price * c.quantity, 0);
+  const discountRaw = parseFloat(discountInput);
+  const discount = Math.max(0, Math.min(subtotal, isNaN(discountRaw) ? 0 : discountRaw));
+  const total = round2(subtotal - discount);
+
+  const isSplit = efectivoActive && transferActive;
+  const hasMethod = efectivoActive || transferActive;
+
+  // Cash amount the customer owes in cash (not bills handed over).
+  let efectivoAmount = 0;
+  if (isSplit) {
+    const raw = parseFloat(efectivoInput);
+    efectivoAmount = round2(Math.max(0, Math.min(total, isNaN(raw) ? 0 : raw)));
+  } else if (efectivoActive) {
+    efectivoAmount = total;
+  }
+  const transferAmount = hasMethod ? round2(total - efectivoAmount) : 0;
+
+  const paidCashNum = parseFloat(amountPaid) || 0;
+  const change = paidCashNum - efectivoAmount;
+
+  const toggleEfectivo = () => {
+    setEfectivoActive((prev) => {
+      const next = !prev;
+      if (!next) {
+        // Leaving split or turning off efectivo entirely — reset cash entry fields.
+        setEfectivoInput("");
+        setAmountPaid("");
+      }
+      return next;
+    });
+  };
+
+  const toggleTransfer = () => {
+    setTransferActive((prev) => {
+      const next = !prev;
+      if (!next) setEfectivoInput("");
+      return next;
+    });
+  };
+
+  const canRegister =
+    cart.length > 0 &&
+    total > 0 &&
+    hasMethod &&
+    (!efectivoActive || paidCashNum >= efectivoAmount) &&
+    (!isSplit || (efectivoAmount > 0 && transferAmount > 0));
+
+  const resetCheckout = () => {
+    setCart([]);
+    setDiscountInput("");
+    setEfectivoActive(false);
+    setTransferActive(false);
+    setEfectivoInput("");
+    setAmountPaid("");
+  };
 
   const handleRegister = async () => {
-    if (cart.length === 0 || !paymentMethod) return;
+    if (!canRegister) return;
     setSaving(true);
     try {
       const uuid = crypto.randomUUID();
       const now = new Date().toISOString();
+
+      const payments: DBPayment[] = [];
+      if (efectivoActive && efectivoAmount > 0) {
+        payments.push({ method: "efectivo", amount: efectivoAmount });
+      }
+      if (transferActive && transferAmount > 0) {
+        payments.push({ method: "transferencia", amount: transferAmount });
+      }
+      const paymentMethod = payments.length === 1 ? payments[0].method : "mixto";
 
       await db.transaction("rw", [db.sales, db.saleItems, db.products], async () => {
         await db.sales.add({
           client_uuid: uuid,
           total,
           payment_method: paymentMethod,
+          payments,
+          discount_amount: discount,
           created_at: now,
           synced: 0,
           user_id: user?.id,
@@ -145,11 +233,9 @@ export function RegisterSale() {
         }
       });
 
-      setCart([]);
-      setPaymentMethod(null);
-      const changeMsg = paymentMethod === "efectivo" && change > 0 ? ` · Cambio: $${change.toFixed(2)}` : "";
-      setAmountPaid("");
-      showToast(`Venta registrada: $${total}${changeMsg}`);
+      const cashChange = efectivoActive && change > 0 ? ` · Cambio: $${change.toFixed(2)}` : "";
+      resetCheckout();
+      showToast(`Venta registrada: $${total.toFixed(2)}${cashChange}`);
 
       if (navigator.onLine) {
         syncToServer().catch(() => {});
@@ -206,7 +292,7 @@ export function RegisterSale() {
                   <button
                     className="btn btn-danger"
                     style={{ padding: "4px 10px", fontSize: "0.8rem", minHeight: "auto" }}
-                    onClick={() => { setCart([]); setConfirmClear(false); }}
+                    onClick={() => { resetCheckout(); setConfirmClear(false); }}
                   >
                     Sí
                   </button>
@@ -247,29 +333,97 @@ export function RegisterSale() {
               ))}
             </div>
 
-            {/* Payment method */}
+            {/* Subtotal / Discount / Total */}
+            <div className="totals-block">
+              <div className="totals-row">
+                <span>Subtotal</span>
+                <span>${subtotal.toFixed(2)}</span>
+              </div>
+              <div className="totals-row">
+                <label htmlFor="discount-input" style={{ margin: 0 }}>Descuento</label>
+                <input
+                  id="discount-input"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*\.?[0-9]*"
+                  value={discountInput}
+                  onChange={(e) => setDiscountInput(e.target.value)}
+                  onFocus={(e) => {
+                    const el = e.currentTarget;
+                    setTimeout(() => el.select(), 0);
+                  }}
+                  placeholder="0"
+                  maxLength={7}
+                  style={{
+                    width: 80,
+                    textAlign: "right",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                    fontWeight: 600,
+                  }}
+                />
+              </div>
+              <div className="totals-row totals-total">
+                <span>Total</span>
+                <span>${total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Payment methods — multi-select */}
             <div className="payment-section">
               <button
-                className={`payment-btn ${paymentMethod === "efectivo" ? "selected" : ""}`}
-                onClick={() => { setPaymentMethod("efectivo"); setAmountPaid(""); }}
+                className={`payment-btn ${efectivoActive ? "selected" : ""}`}
+                onClick={toggleEfectivo}
+                type="button"
               >
                 <span className="payment-icon">💵</span>
                 Efectivo
               </button>
               <button
-                className={`payment-btn ${paymentMethod === "transferencia" ? "selected" : ""}`}
-                onClick={() => { setPaymentMethod("transferencia"); setAmountPaid(""); }}
+                className={`payment-btn ${transferActive ? "selected" : ""}`}
+                onClick={toggleTransfer}
+                type="button"
               >
                 <span className="payment-icon">📱</span>
                 Transferencia
               </button>
             </div>
 
-            {/* Cash change calculator — only for efectivo */}
-            {paymentMethod === "efectivo" && (
+            {/* Split payment breakdown */}
+            {isSplit && (
+              <div className="split-panel">
+                <div className="split-row">
+                  <label htmlFor="efectivo-split" style={{ margin: 0 }}>Efectivo</label>
+                  <input
+                    id="efectivo-split"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*\.?[0-9]*"
+                    value={efectivoInput}
+                    onChange={(e) => setEfectivoInput(e.target.value)}
+                    onFocus={(e) => {
+                      const el = e.currentTarget;
+                      setTimeout(() => el.select(), 0);
+                    }}
+                    placeholder="$0.00"
+                    maxLength={8}
+                  />
+                </div>
+                <div className="split-row" style={{ color: "var(--text-light)" }}>
+                  <span>Transferencia</span>
+                  <span style={{ fontWeight: 600 }}>${transferAmount.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Cash received + change calculator — only when efectivo is involved */}
+            {efectivoActive && (
               <div className="cash-calculator">
                 <div className="cash-input-row">
-                  <label>Recibido</label>
+                  <label>
+                    Recibido{isSplit ? " en efectivo" : ""}
+                  </label>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -283,7 +437,7 @@ export function RegisterSale() {
                     <button key={d} type="button" onClick={() => setAmountPaid(String(d))}>${d}</button>
                   ))}
                 </div>
-                {paidNum > 0 && (
+                {paidCashNum > 0 && (
                   <div className={`cash-change ${change >= 0 ? "ok" : "short"}`}>
                     {change >= 0
                       ? `Cambio: $${change.toFixed(2)}`
@@ -297,9 +451,9 @@ export function RegisterSale() {
             <button
               className="btn btn-primary btn-block register-btn"
               onClick={handleRegister}
-              disabled={!paymentMethod || saving || (paymentMethod === "efectivo" && paidNum < total)}
+              disabled={!canRegister || saving}
             >
-              {saving ? "Guardando..." : `Registrar $${total}`}
+              {saving ? "Guardando..." : `Registrar $${total.toFixed(2)}`}
             </button>
           </div>
         ) : (

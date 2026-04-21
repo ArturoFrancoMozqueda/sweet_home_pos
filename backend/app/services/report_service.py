@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.product import Product
-from app.models.sale import Sale, SaleItem
+from app.models.sale import Sale, SaleItem, SalePayment
 
 try:
     from zoneinfo import ZoneInfo
@@ -41,16 +41,26 @@ async def generate_daily_report(db: AsyncSession, date_str: str | None = None) -
     total_sales_count = row[0]
     total_amount = float(row[1])
 
-    # Payment breakdown
+    # Payment breakdown — grouped by individual payment rows so split payments
+    # (part cash + part transfer on one sale) show up in both buckets correctly.
+    # "count" is the number of payment-method hits, not unique sales.
     payment_result = await db.execute(
-        select(Sale.payment_method, func.count(Sale.id), func.sum(Sale.total))
+        select(SalePayment.method, func.count(SalePayment.id), func.sum(SalePayment.amount))
+        .join(Sale, SalePayment.sale_id == Sale.id)
         .where(Sale.created_at >= start, Sale.created_at <= end, Sale.cancelled == False)  # noqa: E712
-        .group_by(Sale.payment_method)
+        .group_by(SalePayment.method)
     )
     payment_breakdown = [
         {"method": r[0], "count": r[1], "total": float(r[2])}
         for r in payment_result.all()
     ]
+
+    # Total discounts given in the period
+    discount_result = await db.execute(
+        select(func.coalesce(func.sum(Sale.discount_amount), 0))
+        .where(Sale.created_at >= start, Sale.created_at <= end, Sale.cancelled == False)  # noqa: E712
+    )
+    total_discounts = float(discount_result.scalar())
 
     # Top products
     top_result = await db.execute(
@@ -110,6 +120,7 @@ async def generate_daily_report(db: AsyncSession, date_str: str | None = None) -
         "total_amount": total_amount,
         "estimated_profit": estimated_profit,
         "total_cost": total_cost,
+        "total_discounts": total_discounts,
         "payment_breakdown": payment_breakdown,
         "top_products": top_products,
         "low_stock_products": low_stock,

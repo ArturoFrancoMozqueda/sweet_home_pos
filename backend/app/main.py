@@ -148,6 +148,37 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text(stmt))
             except Exception:
                 pass  # SQLite or column already present
+    # Split payment + discount support
+    async with engine.begin() as conn:
+        try:
+            await conn.execute(text(
+                "ALTER TABLE sales ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10,2) NOT NULL DEFAULT 0"
+            ))
+        except Exception:
+            pass
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS sale_payments (
+                id SERIAL PRIMARY KEY,
+                sale_id INTEGER NOT NULL REFERENCES sales(id),
+                method VARCHAR(20) NOT NULL,
+                amount NUMERIC(10,2) NOT NULL
+            )
+        """))
+        try:
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_sale_payments_sale_id ON sale_payments (sale_id)"
+            ))
+        except Exception:
+            pass
+        # Backfill: every existing sale with no payment row gets one derived
+        # from its payment_method + total. Idempotent — only fills gaps.
+        await conn.execute(text("""
+            INSERT INTO sale_payments (sale_id, method, amount)
+            SELECT s.id, s.payment_method, s.total
+            FROM sales s
+            LEFT JOIN sale_payments sp ON sp.sale_id = s.id
+            WHERE sp.id IS NULL
+        """))
     async with async_session() as db:
         await seed_products(db)
     await _seed_admin()

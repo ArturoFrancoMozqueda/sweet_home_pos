@@ -249,6 +249,78 @@
   letter-spacing: 0.02em;
 }
 
+/* ── Subtotal / Discount / Total block ────────────────────── */
+
+.totals-block {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--bg-accent);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.totals-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+
+.totals-row.totals-total {
+  padding-top: 6px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* ── Split payment panel ──────────────────────────────────── */
+
+.split-panel {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.split-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+
+.split-row label {
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.split-row input {
+  width: 110px;
+  padding: 8px 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-xs);
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: right;
+  background: var(--bg-card);
+  color: var(--text);
+}
+
+.split-row input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
 /* ── Cash Change Calculator ───────────────────────────────── */
 
 .cash-calculator {

@@ -28,8 +28,19 @@ class Sale(Base):
     cancellation_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     shift_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("shifts.id"), nullable=True)
 
+    # Discount applied to the whole sale (absolute amount, not percentage).
+    # Invariant: sum(items.subtotal) - discount_amount == total
+    discount_amount: Mapped[float] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
+
     items: Mapped[list["SaleItem"]] = relationship(
         back_populates="sale", cascade="all, delete-orphan"
+    )
+    # Split-payment breakdown. One row per payment method used for this sale.
+    # Invariant: sum(payments.amount) == total
+    payments: Mapped[list["SalePayment"]] = relationship(
+        back_populates="sale", cascade="all, delete-orphan", lazy="selectin"
     )
     cancelled_by: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[cancelled_by_user_id], lazy="selectin"
@@ -38,6 +49,19 @@ class Sale(Base):
     @property
     def cancelled_by_username(self) -> Optional[str]:
         return self.cancelled_by.username if self.cancelled_by else None
+
+
+class SalePayment(Base):
+    __tablename__ = "sale_payments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sale_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("sales.id"), nullable=False, index=True
+    )
+    method: Mapped[str] = mapped_column(String(20), nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+
+    sale: Mapped["Sale"] = relationship(back_populates="payments")
 
 
 class SaleItem(Base):

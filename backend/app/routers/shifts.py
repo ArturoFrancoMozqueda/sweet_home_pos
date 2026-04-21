@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.sale import Sale
+from app.models.sale import Sale, SalePayment
 from app.models.shift import Shift
 from app.models.user import User
 from app.routers.auth import get_current_user, require_admin
@@ -77,20 +77,25 @@ async def close_shift(
     if shift.closed_at:
         raise HTTPException(status_code=400, detail="Este turno ya está cerrado")
 
-    # Calculate sales totals for this shift
+    # Calculate sales totals for this shift — sum from SalePayment so split
+    # payments (part cash / part transfer) contribute correctly to each bucket.
     cash_result = await db.execute(
-        select(func.coalesce(func.sum(Sale.total), 0)).where(
+        select(func.coalesce(func.sum(SalePayment.amount), 0))
+        .join(Sale, SalePayment.sale_id == Sale.id)
+        .where(
             Sale.shift_id == shift_id,
-            Sale.payment_method == "efectivo",
+            SalePayment.method == "efectivo",
             Sale.cancelled == False,  # noqa: E712
         )
     )
     cash_sales = float(cash_result.scalar())
 
     transfer_result = await db.execute(
-        select(func.coalesce(func.sum(Sale.total), 0)).where(
+        select(func.coalesce(func.sum(SalePayment.amount), 0))
+        .join(Sale, SalePayment.sale_id == Sale.id)
+        .where(
             Sale.shift_id == shift_id,
-            Sale.payment_method == "transferencia",
+            SalePayment.method == "transferencia",
             Sale.cancelled == False,  # noqa: E712
         )
     )

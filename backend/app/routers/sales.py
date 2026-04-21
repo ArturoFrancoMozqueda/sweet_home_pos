@@ -14,15 +14,51 @@ except ImportError:
 from app.config import settings
 from app.database import get_db
 from app.models.product import Product
-from app.models.sale import Sale, SaleItem
+from app.models.sale import Sale, SaleItem, SalePayment
 from app.models.shift import Shift
 from app.models.user import User
 from app.routers.auth import get_current_user, require_admin
-from app.schemas.sale import SaleCreate, SaleResponse
+from app.schemas.sale import SaleCreate, SalePaymentCreate, SaleResponse
 
 
 class CancelSaleRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=200)
+
+
+def resolve_payments(data: SaleCreate) -> list[SalePaymentCreate]:
+    """Normalize payments from a SaleCreate, supporting old single-method clients.
+
+    Returns the validated list; raises ValueError if the invariants fail:
+      - payments sum must equal total (±0.01)
+      - items sum minus discount must equal total (±0.01)
+    """
+    if data.payments and len(data.payments) > 0:
+        payments = data.payments
+    elif data.payment_method in ("efectivo", "transferencia"):
+        payments = [SalePaymentCreate(method=data.payment_method, amount=data.total)]
+    else:
+        raise ValueError("Se requiere al menos un método de pago")
+
+    payments_sum = sum(p.amount for p in payments)
+    if abs(payments_sum - data.total) > 0.01:
+        raise ValueError(
+            f"Suma de pagos ({payments_sum:.2f}) no coincide con el total ({data.total:.2f})"
+        )
+
+    items_sum = sum(item.subtotal for item in data.items)
+    expected_total = items_sum - data.discount_amount
+    if abs(expected_total - data.total) > 0.01:
+        raise ValueError(
+            f"Total no coincide con items - descuento "
+            f"(esperado: {expected_total:.2f}, recibido: {data.total:.2f})"
+        )
+    return payments
+
+
+def derive_payment_method(payments: list[SalePaymentCreate]) -> str:
+    if len(payments) == 1:
+        return payments[0].method
+    return "mixto"
 
 
 router = APIRouter(prefix="/api/sales", tags=["sales"])
@@ -38,12 +74,10 @@ async def create_sale(
     if existing.scalars().first():
         raise HTTPException(status_code=409, detail="Venta ya registrada")
 
-    expected_total = sum(item.subtotal for item in data.items)
-    if abs(data.total - expected_total) > 0.01:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Total no coincide con los items (esperado: {expected_total:.2f}, recibido: {data.total:.2f})",
-        )
+    try:
+        payments = resolve_payments(data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Find user's current open shift
     shift_result = await db.execute(
@@ -54,12 +88,16 @@ async def create_sale(
     sale = Sale(
         client_uuid=data.client_uuid,
         total=data.total,
-        payment_method=data.payment_method,
+        discount_amount=data.discount_amount,
+        payment_method=derive_payment_method(payments),
         created_at=data.created_at.replace(tzinfo=None),
         synced_at=datetime.utcnow(),
         user_id=current_user.id,
         shift_id=current_shift.id if current_shift else None,
     )
+
+    for p in payments:
+        sale.payments.append(SalePayment(method=p.method, amount=p.amount))
 
     for item_data in data.items:
         sale.items.append(SaleItem(
@@ -83,7 +121,7 @@ async def create_sale(
 
     db.add(sale)
     await db.commit()
-    await db.refresh(sale, attribute_names=["items"])
+    await db.refresh(sale, attribute_names=["items", "payments"])
     return sale
 
 
