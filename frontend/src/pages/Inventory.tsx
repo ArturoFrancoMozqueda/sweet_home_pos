@@ -169,10 +169,13 @@ export function Inventory() {
     const product = await db.products.get(productId);
     if (!product) return;
     const newStock = Math.max(0, product.stock + delta);
+    const previousStock = product.stock;
+    // Optimistic local update so the UI responds instantly; revert on API failure.
+    await db.products.update(productId, { stock: newStock });
     try {
       await api.put(`/api/products/${productId}/stock`, { stock: newStock });
-      await db.products.update(productId, { stock: newStock });
     } catch {
+      await db.products.update(productId, { stock: previousStock });
       showToast("Error al actualizar stock");
     }
   };
@@ -183,24 +186,37 @@ export function Inventory() {
 
   const commitStockDraft = async (productId: number) => {
     const draft = stockDrafts[productId];
-    clearStockDraft(productId);
     if (draft === undefined) return;
 
     const product = await db.products.get(productId);
-    if (!product) return;
+    if (!product) {
+      clearStockDraft(productId);
+      return;
+    }
 
     const num = parseInt(draft, 10);
-    if (isNaN(num) || num < 0 || num === product.stock) return;
+    if (isNaN(num) || num < 0 || num === product.stock) {
+      clearStockDraft(productId);
+      return;
+    }
 
     if (!navigator.onLine) {
+      clearStockDraft(productId);
       showToast("Se requiere conexión para ajustar stock");
       return;
     }
+
+    const previousStock = product.stock;
+    // Write Dexie first so the live query already shows `num` before we clear the
+    // draft — otherwise the input briefly falls back to the old product.stock.
+    await db.products.update(productId, { stock: num });
+    clearStockDraft(productId);
+
     try {
       await api.put(`/api/products/${productId}/stock`, { stock: num });
-      await db.products.update(productId, { stock: num });
       showToast("Stock actualizado");
     } catch {
+      await db.products.update(productId, { stock: previousStock });
       showToast("Error al actualizar stock");
     }
   };
