@@ -281,11 +281,19 @@ export function Inventory() {
                   </button>
                   <input
                     className={`stock-value ${isCritical ? "critical" : isLow ? "low" : ""}`}
-                    type="number"
+                    type="text"
                     inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={5}
                     value={stockDrafts[product.id] ?? product.stock}
                     onChange={(e) => handleStockInputChange(product.id, e.target.value)}
-                    onFocus={(e) => e.currentTarget.select()}
+                    onFocus={(e) => {
+                      // Defer select() so it runs after the browser has placed the
+                      // cursor from the tap; without this, mobile browsers move the
+                      // cursor AFTER onFocus fires and undo the selection.
+                      const el = e.currentTarget;
+                      setTimeout(() => el.select(), 0);
+                    }}
                     onBlur={() => commitStockDraft(product.id)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -305,7 +313,6 @@ export function Inventory() {
                       fontWeight: 700,
                       fontSize: "1rem",
                     }}
-                    min={0}
                   />
                   <button
                     className="stock-btn"
