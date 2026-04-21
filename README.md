@@ -15,6 +15,7 @@ Aplicacion web movil, offline-first, para registrar ventas diarias de forma rapi
 ## Funcionalidades
 
 - Registro de ventas rapido en 3-4 toques
+- Calculadora de cambio en efectivo con botones rapidos de denominaciones ($20, $50, $100, $200, $500)
 - Descuento automatico de inventario al vender (con row-level locking)
 - Funciona sin internet (offline-first con sincronizacion automatica)
 - Sistema de autenticacion con roles: **admin** y **empleado**
@@ -213,12 +214,20 @@ erDiagram
         int id PK
         string name
         decimal price
+        decimal cost_price
         int stock
         int low_stock_threshold
         bool active
         string image_url
         datetime created_at
         datetime updated_at
+    }
+
+    ProductImage {
+        string uuid PK
+        string content_type
+        bytes data
+        datetime created_at
     }
 
     Shift {
@@ -295,7 +304,8 @@ sweet_home_pos/
 │   │   ├── seed.py                 # Seed del catalogo de productos
 │   │   ├── models/
 │   │   │   ├── user.py             # Modelo User (auth)
-│   │   │   ├── product.py          # Modelo Product (con image_url)
+│   │   │   ├── product.py          # Modelo Product (con image_url, cost_price)
+│   │   │   ├── product_image.py    # Modelo ProductImage (blob de imagen en BD)
 │   │   │   ├── sale.py             # Modelos Sale + SaleItem (con cancelled, shift_id)
 │   │   │   └── shift.py            # Modelo Shift (apertura/cierre de caja)
 │   │   ├── schemas/
@@ -311,12 +321,11 @@ sweet_home_pos/
 │   │   │   ├── reports.py          # GET resumen diario (solo admin)
 │   │   │   ├── sync.py             # POST sync batch con failed reporting
 │   │   │   └── shifts.py           # Abrir/cerrar turnos, historial
-│   │   ├── services/
-│   │   │   ├── auth_service.py     # hash, verify, create_token, decode_token
-│   │   │   ├── email_service.py    # Gmail SMTP + template HTML
-│   │   │   ├── report_service.py   # Datos del resumen diario (excluye anuladas)
-│   │   │   └── scheduler.py        # APScheduler cron (9PM Mexico)
-│   │   └── uploads/products/       # Imagenes subidas de productos
+│   │   └── services/
+│   │       ├── auth_service.py     # hash, verify, create_token, decode_token
+│   │       ├── email_service.py    # Gmail SMTP + template HTML
+│   │       ├── report_service.py   # Datos del resumen diario (excluye anuladas)
+│   │       └── scheduler.py        # APScheduler cron (9PM Mexico)
 │   ├── .python-version
 │   └── requirements.txt
 ├── frontend/
@@ -392,7 +401,8 @@ Authorization: Bearer <token>
 | PUT | `/api/products/{id}` | Admin | Editar producto (nombre, precio, umbral, imagen, activo) |
 | PUT | `/api/products/{id}/stock` | Admin | Actualizar stock (requiere conexion) |
 | GET | `/api/products/low-stock` | Usuario | Productos con stock bajo el umbral |
-| POST | `/api/products/upload-image` | Admin | Subir imagen (JPG/PNG/WebP/GIF, max 5 MB) |
+| POST | `/api/products/upload-image` | Admin | Subir imagen (JPG/PNG/WebP/GIF, max 5 MB). Se guarda en PostgreSQL |
+| GET | `/api/products/images/{uuid}` | Publico | Servir imagen desde PostgreSQL (cache immutable) |
 
 ### Ventas
 
@@ -540,8 +550,10 @@ npm run dev
 ### Registrar una venta
 1. Pantalla "Venta" → toca productos para agregar al carrito
 2. Usa +/- para ajustar cantidades
-3. Selecciona metodo de pago (Efectivo o Transferencia)
-4. Toca "Registrar $XX"
+3. Selecciona metodo de pago:
+   - **Efectivo**: aparece calculadora de cambio. Ingresa el monto recibido o toca los botones rapidos ($20/$50/$100/$200/$500). El sistema muestra el cambio en verde (o "Falta $X" en rojo si no alcanza)
+   - **Transferencia**: monto exacto, no requiere calculadora
+4. Toca "Registrar $XX" — el toast incluye el cambio si aplica
 5. La venta se vincula automaticamente a tu turno abierto
 
 ### Cerrar turno
@@ -582,7 +594,6 @@ npm run dev
 - Generacion de recibos (compartir/imprimir)
 - Reportes semanales y mensuales
 - Exportacion a CSV de ventas e inventario
-- Precio de costo y margen de ganancia por producto
 - Pedidos anticipados (pasteles, catering)
 - Cambio de contrasena desde la app
 - Programa de lealtad para clientes
