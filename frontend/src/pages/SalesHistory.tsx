@@ -28,6 +28,10 @@ interface ServerSale {
   payment_method: string;
   created_at: string;
   synced_at: string;
+  cancelled?: boolean;
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
+  cancelled_by_username?: string | null;
   items: { product_name: string; quantity: number; subtotal: number }[];
 }
 
@@ -40,21 +44,29 @@ export function SalesHistory() {
   const [serverSales, setServerSales] = useState<ServerSale[]>([]);
   const [loading, setLoading] = useState(false);
   const [confirmCancelId, setConfirmCancelId] = useState<number | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
 
-  // Fetch from server when online and date changes
+  const isAdmin = user?.role === "admin";
+
+  // Fetch from server when online and date changes.
+  // Admins see cancelled sales too so the audit trail is visible.
   useEffect(() => {
     if (!navigator.onLine) return;
     setLoading(true);
-    const params = dateFilter
-      ? `?date_from=${dateFilter}&date_to=${dateFilter}&limit=200`
-      : `?limit=200`;
+    const qs = new URLSearchParams();
+    if (dateFilter) {
+      qs.set("date_from", dateFilter);
+      qs.set("date_to", dateFilter);
+    }
+    qs.set("limit", "200");
+    if (isAdmin) qs.set("include_cancelled", "true");
     api
-      .get(`/api/sales${params}`)
+      .get(`/api/sales?${qs.toString()}`)
       .then((data: ServerSale[]) => setServerSales(data))
       .catch(() => setServerSales([]))
       .finally(() => setLoading(false));
-  }, [dateFilter]);
+  }, [dateFilter, isAdmin]);
 
   // Local unsynced sales (not yet on server)
   const localPending = useLiveQuery(async () => {
@@ -79,12 +91,41 @@ export function SalesHistory() {
     return map;
   }, [localPending], new Map<string, DBSaleItem[]>());
 
+  const openCancelPrompt = (saleId: number) => {
+    setConfirmCancelId(saleId);
+    setCancelReason("");
+  };
+
+  const closeCancelPrompt = () => {
+    setConfirmCancelId(null);
+    setCancelReason("");
+  };
+
   const handleCancel = async (saleId: number) => {
     setCancelling(true);
     try {
-      await api.delete(`/api/sales/${saleId}`);
-      setServerSales((prev) => prev.filter((s) => s.id !== saleId));
-      setConfirmCancelId(null);
+      const reason = cancelReason.trim();
+      await api.delete(
+        `/api/sales/${saleId}`,
+        reason ? { reason } : undefined
+      );
+      // Mark locally as cancelled with the audit trail so the row stays visible
+      // (admins still see cancelled sales); no full refetch needed.
+      const nowIso = new Date().toISOString();
+      setServerSales((prev) =>
+        prev.map((s) =>
+          s.id === saleId
+            ? {
+                ...s,
+                cancelled: true,
+                cancelled_at: nowIso,
+                cancellation_reason: reason || null,
+                cancelled_by_username: user?.username ?? null,
+              }
+            : s
+        )
+      );
+      closeCancelPrompt();
       showToast("Venta anulada");
     } catch {
       showToast("Error al anular la venta");
@@ -158,43 +199,72 @@ export function SalesHistory() {
         <>
           {/* Server sales */}
           {serverSales.map((sale) => (
-            <div key={sale.client_uuid} className="history-sale">
+            <div
+              key={sale.client_uuid}
+              className="history-sale"
+              style={sale.cancelled ? { opacity: 0.6 } : undefined}
+            >
               <div className="history-sale-header">
                 <div>
-                  <div className="history-sale-time">
+                  <div
+                    className="history-sale-time"
+                    style={sale.cancelled ? { textDecoration: "line-through" } : undefined}
+                  >
                     {formatDate(sale.created_at)} — {formatTime(sale.created_at)}
                   </div>
                   <div className="history-sale-method">
                     {sale.payment_method === "efectivo" ? "Efectivo" : "Transferencia"}
                     {" · "}
-                    <span className="sale-synced yes">✓ Sincronizada</span>
+                    {sale.cancelled ? (
+                      <span style={{ color: "var(--danger, #dc2626)", fontWeight: 600 }}>✕ Anulada</span>
+                    ) : (
+                      <span className="sale-synced yes">✓ Sincronizada</span>
+                    )}
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {user?.role === "admin" && (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  {isAdmin && !sale.cancelled && (
                     confirmCancelId === sale.id ? (
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
                         <span style={{ fontSize: "0.8rem", color: "var(--danger, #dc2626)" }}>¿Anular?</span>
-                        <button
-                          className="btn btn-danger"
-                          style={{ padding: "4px 10px", fontSize: "0.8rem", minHeight: "auto" }}
-                          onClick={() => handleCancel(sale.id)}
+                        <input
+                          type="text"
+                          value={cancelReason}
+                          onChange={(e) => setCancelReason(e.target.value)}
+                          placeholder="Motivo (opcional)"
+                          maxLength={200}
                           disabled={cancelling}
-                        >
-                          Sí
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: "4px 10px", fontSize: "0.8rem", minHeight: "auto" }}
-                          onClick={() => setConfirmCancelId(null)}
-                          disabled={cancelling}
-                        >
-                          No
-                        </button>
+                          autoFocus
+                          style={{
+                            fontSize: "0.8rem",
+                            padding: "4px 8px",
+                            border: "1px solid var(--border)",
+                            borderRadius: 6,
+                            width: 180,
+                          }}
+                        />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            className="btn btn-danger"
+                            style={{ padding: "4px 10px", fontSize: "0.8rem", minHeight: "auto" }}
+                            onClick={() => handleCancel(sale.id)}
+                            disabled={cancelling}
+                          >
+                            Sí
+                          </button>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: "4px 10px", fontSize: "0.8rem", minHeight: "auto" }}
+                            onClick={closeCancelPrompt}
+                            disabled={cancelling}
+                          >
+                            No
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <button
-                        onClick={() => setConfirmCancelId(sale.id)}
+                        onClick={() => openCancelPrompt(sale.id)}
                         aria-label="Anular venta"
                         style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-light)", padding: "4px" }}
                       >
@@ -207,9 +277,36 @@ export function SalesHistory() {
                       </button>
                     )
                   )}
-                  <span className="history-sale-total">${sale.total}</span>
+                  <span
+                    className="history-sale-total"
+                    style={sale.cancelled ? { textDecoration: "line-through" } : undefined}
+                  >
+                    ${sale.total}
+                  </span>
                 </div>
               </div>
+              {sale.cancelled && (sale.cancelled_by_username || sale.cancelled_at || sale.cancellation_reason) && (
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "var(--text-light)",
+                    marginTop: 6,
+                    padding: "6px 10px",
+                    background: "var(--bg, #f9f9f9)",
+                    borderLeft: "3px solid var(--danger, #dc2626)",
+                    borderRadius: 4,
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>Anulada</span>
+                  {sale.cancelled_by_username && <> por <strong>{sale.cancelled_by_username}</strong></>}
+                  {sale.cancelled_at && <> · {formatDate(sale.cancelled_at)} {formatTime(sale.cancelled_at)}</>}
+                  {sale.cancellation_reason && (
+                    <div style={{ marginTop: 2, fontStyle: "italic" }}>
+                      Motivo: {sale.cancellation_reason}
+                    </div>
+                  )}
+                </div>
+              )}
               {sale.items.length > 0 && (
                 <div className="history-sale-items">
                   {sale.items.map((item, i) => (

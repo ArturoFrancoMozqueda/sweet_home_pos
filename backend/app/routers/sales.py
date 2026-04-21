@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -18,6 +19,11 @@ from app.models.shift import Shift
 from app.models.user import User
 from app.routers.auth import get_current_user, require_admin
 from app.schemas.sale import SaleCreate, SaleResponse
+
+
+class CancelSaleRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=200)
+
 
 router = APIRouter(prefix="/api/sales", tags=["sales"])
 
@@ -87,15 +93,18 @@ async def get_sales(
     date_to: str | None = Query(None, description="YYYY-MM-DD"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    include_cancelled: bool = Query(False, description="Include cancelled sales (admin only)"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     query = (
         select(Sale)
         .options(selectinload(Sale.items))
-        .where(Sale.cancelled == False)  # noqa: E712
         .order_by(Sale.created_at.desc())
     )
+    # Only admins may view cancelled sales; employees always see active-only.
+    if not (include_cancelled and current_user.role == "admin"):
+        query = query.where(Sale.cancelled == False)  # noqa: E712
 
     # Employees only see their own sales for today
     if current_user.role == "employee":
@@ -149,7 +158,8 @@ async def get_sales_count(
 @router.delete("/{sale_id}", status_code=204)
 async def cancel_sale(
     sale_id: int,
-    _: User = Depends(require_admin),
+    body: CancelSaleRequest | None = Body(None),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -161,6 +171,10 @@ async def cancel_sale(
     if sale.cancelled:
         raise HTTPException(status_code=400, detail="La venta ya fue cancelada")
     sale.cancelled = True
+    sale.cancelled_at = datetime.utcnow()
+    sale.cancelled_by_user_id = current_user.id
+    reason = (body.reason if body else None) or None
+    sale.cancellation_reason = reason.strip() if reason else None
     for item in sale.items:
         prod = (
             await db.execute(select(Product).where(Product.id == item.product_id).with_for_update())

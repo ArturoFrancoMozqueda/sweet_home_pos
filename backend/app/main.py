@@ -137,6 +137,17 @@ async def lifespan(app: FastAPI):
                 sent_at TIMESTAMP NOT NULL DEFAULT NOW()
             )
         """))
+    # Cancellation audit trail on sales
+    async with engine.begin() as conn:
+        for stmt in [
+            "ALTER TABLE sales ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP",
+            "ALTER TABLE sales ADD COLUMN IF NOT EXISTS cancelled_by_user_id INTEGER REFERENCES users(id)",
+            "ALTER TABLE sales ADD COLUMN IF NOT EXISTS cancellation_reason VARCHAR(200)",
+        ]:
+            try:
+                await conn.execute(text(stmt))
+            except Exception:
+                pass  # SQLite or column already present
     async with async_session() as db:
         await seed_products(db)
     await _seed_admin()

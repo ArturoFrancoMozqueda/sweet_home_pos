@@ -39,6 +39,9 @@ class SaleResponse(BaseModel):
     created_at: datetime
     synced_at: datetime
     cancelled: bool
+    cancelled_at: datetime | None = None
+    cancellation_reason: str | None = None
+    cancelled_by_username: str | None = None
     items: list[SaleItemResponse]
 
     model_config = {"from_attributes": True}
