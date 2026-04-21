@@ -5,6 +5,7 @@ import { BottomNav } from "./components/BottomNav";
 import { SyncIndicator } from "./components/SyncIndicator";
 import { ToastContainer } from "./components/Toast";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
+import { useSessionWarning } from "./hooks/useSessionWarning";
 import { db } from "./db/database";
 import { RegisterSale } from "./pages/RegisterSale";
 import { Inventory } from "./pages/Inventory";
@@ -17,9 +18,18 @@ import { Shifts } from "./pages/Shifts";
 function AuthenticatedApp({ user }: { user: import("./contexts/AuthContext").AuthUser }) {
   const { isOnline, isSyncing, syncError, triggerSync } = useOnlineStatus();
   const pendingCount = useLiveQuery(() => db.sales.where("synced").equals(0).count(), [], 0);
+  const failedCount = useLiveQuery(() => db.sales.where("synced").equals(2).count(), [], 0);
+  useSessionWarning();
   return (
     <>
-      <SyncIndicator isOnline={isOnline} isSyncing={isSyncing} syncError={syncError} pendingCount={pendingCount} onSync={triggerSync} />
+      <SyncIndicator
+        isOnline={isOnline}
+        isSyncing={isSyncing}
+        syncError={syncError}
+        pendingCount={pendingCount}
+        failedCount={failedCount}
+        onSync={triggerSync}
+      />
       <Routes>
         <Route path="/" element={<RegisterSale />} />
         <Route path="/inventory" element={<Inventory />} />

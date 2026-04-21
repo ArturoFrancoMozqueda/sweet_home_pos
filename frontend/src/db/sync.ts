@@ -20,25 +20,63 @@ async function fetchImageAsBase64(url: string): Promise<string | undefined> {
   }
 }
 
+// Stop caching new images once we're above this fraction of the origin quota.
+// Sale writes need headroom — losing a sale to a full cache is unacceptable.
+const IMAGE_CACHE_QUOTA_CEILING = 0.75;
+
+async function isStorageBelowCeiling(): Promise<boolean> {
+  try {
+    if (typeof navigator === "undefined" || !navigator.storage?.estimate) return true;
+    const est = await navigator.storage.estimate();
+    if (!est.quota || est.quota <= 0 || est.usage == null) return true;
+    return est.usage / est.quota < IMAGE_CACHE_QUOTA_CEILING;
+  } catch {
+    return true;
+  }
+}
+
 async function cacheProductImages(products: DBProduct[]): Promise<void> {
+  let quotaSkipLogged = false;
   for (const product of products) {
-    if (product.image_url && !product.image_data) {
-      const base64 = await fetchImageAsBase64(product.image_url);
-      if (base64) {
-        await db.products.update(product.id, { image_data: base64 });
+    if (!product.image_url || product.image_data) continue;
+
+    if (!(await isStorageBelowCeiling())) {
+      if (!quotaSkipLogged) {
+        console.warn(
+          "IDB storage above ceiling; skipping remaining product image cache writes"
+        );
+        quotaSkipLogged = true;
       }
+      return;
+    }
+
+    const base64 = await fetchImageAsBase64(product.image_url);
+    if (!base64) continue;
+
+    try {
+      await db.products.update(product.id, { image_data: base64 });
+    } catch (err) {
+      // QuotaExceededError or similar — give up for this sync pass; don't retry now.
+      console.warn("Failed to cache product image (storage?):", err);
+      return;
     }
   }
 }
 
-export async function syncToServer(): Promise<boolean> {
+export interface SyncResult {
+  ok: boolean;
+  syncedCount: number;
+  failedCount: number;
+}
+
+export async function syncToServer(): Promise<SyncResult> {
   try {
-    // Get unsynced sales
+    // Get unsynced sales (synced=0 only — synced=2 means server already rejected)
     const unsyncedSales = await db.sales.where("synced").equals(0).toArray();
     if (unsyncedSales.length === 0) {
       // Still fetch latest products
       await refreshProducts();
-      return true;
+      return { ok: true, syncedCount: 0, failedCount: 0 };
     }
 
     // Build sync payload
@@ -66,13 +104,30 @@ export async function syncToServer(): Promise<boolean> {
 
     const response = await api.post("/api/sync", { sales: salesPayload });
 
-    if (response.synced_uuids) {
-      // Mark synced sales
-      await db.transaction("rw", db.sales, async () => {
-        for (const uuid of response.synced_uuids) {
-          await db.sales.where("client_uuid").equals(uuid).modify({ synced: 1 });
-        }
-      });
+    const syncedUuids: string[] = Array.isArray(response.synced_uuids)
+      ? response.synced_uuids
+      : [];
+    const failures: Array<{ uuid: string; reason: string }> = Array.isArray(response.failed)
+      ? response.failed
+      : [];
+
+    await db.transaction("rw", db.sales, async () => {
+      for (const uuid of syncedUuids) {
+        await db.sales.where("client_uuid").equals(uuid).modify({
+          synced: 1,
+          sync_error: undefined,
+        });
+      }
+      for (const { uuid, reason } of failures) {
+        await db.sales.where("client_uuid").equals(uuid).modify({
+          synced: 2,
+          sync_error: reason,
+        });
+      }
+    });
+
+    if (failures.length > 0) {
+      console.warn(`Sync: ${failures.length} sale(s) rejected by server`, failures);
     }
 
     // Update products from server — preserve local image_data
@@ -105,10 +160,14 @@ export async function syncToServer(): Promise<boolean> {
       cacheProductImages(updatedProducts).catch(() => {});
     }
 
-    return true;
+    return {
+      ok: true,
+      syncedCount: syncedUuids.length,
+      failedCount: failures.length,
+    };
   } catch (error) {
     console.warn("Sync failed (offline?):", error);
-    return false;
+    return { ok: false, syncedCount: 0, failedCount: 0 };
   }
 }
 

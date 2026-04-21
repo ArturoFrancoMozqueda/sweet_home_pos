@@ -5,20 +5,60 @@ import { db, type DBProduct } from "../db/database";
 import { syncToServer } from "../db/sync";
 import { ProductGrid } from "../components/ProductGrid";
 import { useToast } from "../components/Toast";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth, SALE_DRAFT_KEY } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import type { CartItem } from "../types";
 
+type PaymentMethod = "efectivo" | "transferencia" | null;
+
+interface SaleDraft {
+  user_id?: number;
+  cart: CartItem[];
+  paymentMethod: PaymentMethod;
+  amountPaid: string;
+}
+
+function loadSaleDraft(userId: number | undefined): SaleDraft | null {
+  try {
+    const raw = sessionStorage.getItem(SALE_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SaleDraft;
+    // Discard a draft left by a previous user to avoid cross-session cart leaks.
+    if (parsed.user_id !== userId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export function RegisterSale() {
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<"efectivo" | "transferencia" | null>(null);
+  const { user } = useAuth();
+  const initialDraft = loadSaleDraft(user?.id);
+
+  const [cart, setCart] = useState<CartItem[]>(initialDraft?.cart ?? []);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(initialDraft?.paymentMethod ?? null);
   const [saving, setSaving] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [amountPaid, setAmountPaid] = useState("");
+  const [amountPaid, setAmountPaid] = useState(initialDraft?.amountPaid ?? "");
   const [hasShift, setHasShift] = useState<boolean | null>(null); // null = loading
   const { showToast } = useToast();
-  const { user } = useAuth();
   const navigate = useNavigate();
+
+  // Persist the in-flight sale so a 401-triggered reload, crash, or accidental nav
+  // doesn't lose what the cashier already rang up.
+  useEffect(() => {
+    try {
+      if (cart.length === 0) {
+        sessionStorage.removeItem(SALE_DRAFT_KEY);
+      } else {
+        const draft: SaleDraft = { user_id: user?.id, cart, paymentMethod, amountPaid };
+        sessionStorage.setItem(SALE_DRAFT_KEY, JSON.stringify(draft));
+      }
+    } catch {
+      // sessionStorage may be unavailable or full — fail silently, losing draft
+      // is not worse than today's behavior.
+    }
+  }, [cart, paymentMethod, amountPaid, user?.id]);
 
   // Check if user has an open shift
   useEffect(() => {

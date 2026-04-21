@@ -3,7 +3,11 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config import settings
+from app.models.daily_report_log import DailyReportLog
 
 logger = logging.getLogger(__name__)
 
@@ -167,3 +171,31 @@ async def send_daily_report_email(report: dict) -> bool:
             logger.error(f"Email attempt {attempt + 1} failed: {e}")
 
     return False
+
+
+async def send_daily_report_once(db: AsyncSession) -> dict:
+    """Send today's daily report email exactly once per calendar day.
+
+    Idempotent: if a row already exists in daily_report_log for today's Mexico-TZ
+    date, returns skipped=True without re-sending. The log row is only written
+    after a successful send, so transient email failures will retry on the next
+    trigger.
+    """
+    from app.services.report_service import generate_daily_report
+
+    report = await generate_daily_report(db)
+    report_date = report["date"]
+
+    existing = await db.execute(
+        select(DailyReportLog).where(DailyReportLog.report_date == report_date)
+    )
+    if existing.scalars().first():
+        logger.info(f"Daily report for {report_date} already sent; skipping")
+        return {"sent": False, "skipped": True, "date": report_date}
+
+    success = await send_daily_report_email(report)
+    if success:
+        db.add(DailyReportLog(report_date=report_date))
+        await db.commit()
+
+    return {"sent": success, "skipped": False, "date": report_date}

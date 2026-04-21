@@ -5,8 +5,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.config import settings
 from app.database import async_session
-from app.services.email_service import send_daily_report_email
-from app.services.report_service import generate_daily_report
+from app.services.email_service import send_daily_report_once
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +16,7 @@ async def daily_report_job():
     logger.info("Running daily report job...")
     try:
         async with async_session() as db:
-            report = await generate_daily_report(db)
-            await send_daily_report_email(report)
+            await send_daily_report_once(db)
     except Exception as e:
         logger.error(f"Daily report job failed: {e}")
 

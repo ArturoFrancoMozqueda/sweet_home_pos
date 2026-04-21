@@ -18,6 +18,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const TOKEN_KEY = "sweet_home_token";
 const USER_KEY = "sweet_home_user";
+// Exposed so the sale-draft writer stays in lockstep with logout / session change.
+export const SALE_DRAFT_KEY = "sweet_home_sale_draft";
 
 function loadFromStorage(): { user: AuthUser | null; token: string | null } {
   try {
@@ -53,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem(SALE_DRAFT_KEY);
     setAuth({ user: null, token: null });
   }, []);
 

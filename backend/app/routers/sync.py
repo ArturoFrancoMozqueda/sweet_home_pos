@@ -1,7 +1,9 @@
-from datetime import datetime, timezone
+import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -11,6 +13,8 @@ from app.models.shift import Shift
 from app.models.user import User
 from app.routers.auth import get_current_user
 from app.schemas.sync import SyncFailure, SyncRequest, SyncResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
 
@@ -48,36 +52,58 @@ async def sync_sales(
             ))
             continue
 
-        sale = Sale(
-            client_uuid=sale_data.client_uuid,
-            total=sale_data.total,
-            payment_method=sale_data.payment_method,
-            created_at=sale_data.created_at.replace(tzinfo=None),
-            synced_at=datetime.utcnow(),
-            user_id=current_user.id,
-            shift_id=current_shift.id if current_shift else None,
-        )
+        # Per-sale savepoint: a DB failure on one sale rolls back only that sale,
+        # not the whole batch. The client only sees a UUID in synced_uuids when
+        # the row actually persisted (or pre-existed).
+        try:
+            async with db.begin_nested():
+                sale = Sale(
+                    client_uuid=sale_data.client_uuid,
+                    total=sale_data.total,
+                    payment_method=sale_data.payment_method,
+                    created_at=sale_data.created_at.replace(tzinfo=None),
+                    synced_at=datetime.utcnow(),
+                    user_id=current_user.id,
+                    shift_id=current_shift.id if current_shift else None,
+                )
 
-        for item_data in sale_data.items:
-            sale_item = SaleItem(
-                product_id=item_data.product_id,
-                product_name=item_data.product_name,
-                quantity=item_data.quantity,
-                unit_price=item_data.unit_price,
-                subtotal=item_data.subtotal,
-            )
-            sale.items.append(sale_item)
+                for item_data in sale_data.items:
+                    sale_item = SaleItem(
+                        product_id=item_data.product_id,
+                        product_name=item_data.product_name,
+                        quantity=item_data.quantity,
+                        unit_price=item_data.unit_price,
+                        subtotal=item_data.subtotal,
+                    )
+                    sale.items.append(sale_item)
 
-            # Discount inventory with row lock
-            result = await db.execute(
-                select(Product).where(Product.id == item_data.product_id).with_for_update()
-            )
-            product = result.scalars().first()
-            if product:
-                product.stock = max(0, product.stock - item_data.quantity)
+                    # Discount inventory with row lock
+                    result = await db.execute(
+                        select(Product).where(Product.id == item_data.product_id).with_for_update()
+                    )
+                    product = result.scalars().first()
+                    if product:
+                        product.stock = max(0, product.stock - item_data.quantity)
 
-        db.add(sale)
-        synced_uuids.append(sale_data.client_uuid)
+                db.add(sale)
+                await db.flush()
+            synced_uuids.append(sale_data.client_uuid)
+        except IntegrityError:
+            # Concurrent request persisted the same client_uuid first — treat as synced.
+            logger.warning("Duplicate UUID race on sync: %s", sale_data.client_uuid)
+            synced_uuids.append(sale_data.client_uuid)
+        except SQLAlchemyError:
+            logger.exception("DB error syncing sale %s", sale_data.client_uuid)
+            failed.append(SyncFailure(
+                uuid=sale_data.client_uuid,
+                reason="Error de base de datos al guardar la venta",
+            ))
+        except Exception as exc:
+            logger.exception("Unexpected error syncing sale %s", sale_data.client_uuid)
+            failed.append(SyncFailure(
+                uuid=sale_data.client_uuid,
+                reason=f"Error inesperado ({type(exc).__name__})",
+            ))
 
     await db.commit()
 

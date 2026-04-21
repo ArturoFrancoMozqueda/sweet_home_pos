@@ -3,13 +3,22 @@ interface Props {
   isSyncing: boolean;
   syncError?: boolean;
   pendingCount?: number;
+  failedCount?: number;
   onSync: () => void;
 }
 
-export function SyncIndicator({ isOnline, isSyncing, syncError, pendingCount, onSync }: Props) {
+export function SyncIndicator({
+  isOnline,
+  isSyncing,
+  syncError,
+  pendingCount,
+  failedCount,
+  onSync,
+}: Props) {
+  const hasFailed = !!failedCount && failedCount > 0;
   const status = isSyncing
     ? "syncing"
-    : syncError
+    : syncError || hasFailed
       ? "error"
       : isOnline
         ? "online"
@@ -17,11 +26,13 @@ export function SyncIndicator({ isOnline, isSyncing, syncError, pendingCount, on
 
   const label = isSyncing
     ? "Sincronizando..."
-    : syncError
-      ? "Error de sincronización"
-      : isOnline
-        ? "En línea"
-        : "Sin conexión";
+    : hasFailed
+      ? `${failedCount} venta${failedCount !== 1 ? "s" : ""} rechazada${failedCount !== 1 ? "s" : ""}`
+      : syncError
+        ? "Error de sincronización"
+        : isOnline
+          ? "En línea"
+          : "Sin conexión";
 
   const showPending = !isSyncing && pendingCount && pendingCount > 0;
 

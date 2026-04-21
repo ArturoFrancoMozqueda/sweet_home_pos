@@ -28,8 +28,9 @@ export interface DBSale {
   total: number;
   payment_method: string;
   created_at: string;
-  synced: number; // 0 = not synced, 1 = synced
+  synced: number; // 0 = pending, 1 = synced, 2 = server rejected (no auto-retry)
   user_id?: number;
+  sync_error?: string;
 }
 
 class SweetHomeDB extends Dexie {
@@ -58,6 +59,12 @@ class SweetHomeDB extends Dexie {
     });
     // Version 4: image_data for offline images (no index needed)
     this.version(4).stores({
+      products: "id, name, active",
+      sales: "++id, client_uuid, created_at, synced, user_id",
+      saleItems: "++id, sale_uuid, product_id",
+    });
+    // Version 5: sync_error on sales + synced=2 state for server-rejected sales
+    this.version(5).stores({
       products: "id, name, active",
       sales: "++id, client_uuid, created_at, synced, user_id",
       saleItems: "++id, sale_uuid, product_id",

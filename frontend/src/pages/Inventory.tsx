@@ -31,6 +31,9 @@ export function Inventory() {
   const [formUploading, setFormUploading] = useState(false);
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  // Per-product draft while the user types in the stock input.
+  // Keeps the input editable even though the committed value comes from a live query.
+  const [stockDrafts, setStockDrafts] = useState<Record<number, string>>({});
 
   const openCreate = () => {
     setFormName(""); setFormPrice(""); setFormCostPrice(""); setFormStock("0");
@@ -147,7 +150,18 @@ export function Inventory() {
     }
   };
 
+  const clearStockDraft = (productId: number) => {
+    setStockDrafts((prev) => {
+      if (!(productId in prev)) return prev;
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+  };
+
   const adjustStock = async (productId: number, delta: number) => {
+    // Typed-but-uncommitted input should not linger once +/- is used.
+    clearStockDraft(productId);
     if (!navigator.onLine) {
       showToast("Se requiere conexión para ajustar stock");
       return;
@@ -163,13 +177,25 @@ export function Inventory() {
     }
   };
 
-  const setStock = async (productId: number, value: string) => {
+  const handleStockInputChange = (productId: number, value: string) => {
+    setStockDrafts((prev) => ({ ...prev, [productId]: value }));
+  };
+
+  const commitStockDraft = async (productId: number) => {
+    const draft = stockDrafts[productId];
+    clearStockDraft(productId);
+    if (draft === undefined) return;
+
+    const product = await db.products.get(productId);
+    if (!product) return;
+
+    const num = parseInt(draft, 10);
+    if (isNaN(num) || num < 0 || num === product.stock) return;
+
     if (!navigator.onLine) {
       showToast("Se requiere conexión para ajustar stock");
       return;
     }
-    const num = parseInt(value, 10);
-    if (isNaN(num) || num < 0) return;
     try {
       await api.put(`/api/products/${productId}/stock`, { stock: num });
       await db.products.update(productId, { stock: num });
@@ -256,8 +282,19 @@ export function Inventory() {
                   <input
                     className={`stock-value ${isCritical ? "critical" : isLow ? "low" : ""}`}
                     type="number"
-                    value={product.stock}
-                    onChange={(e) => setStock(product.id, e.target.value)}
+                    inputMode="numeric"
+                    value={stockDrafts[product.id] ?? product.stock}
+                    onChange={(e) => handleStockInputChange(product.id, e.target.value)}
+                    onFocus={(e) => e.currentTarget.select()}
+                    onBlur={() => commitStockDraft(product.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.currentTarget.blur();
+                      } else if (e.key === "Escape") {
+                        clearStockDraft(product.id);
+                        e.currentTarget.blur();
+                      }
+                    }}
                     readOnly={readOnly}
                     style={{
                       width: 50,

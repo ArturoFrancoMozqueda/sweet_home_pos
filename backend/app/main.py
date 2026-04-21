@@ -129,6 +129,14 @@ async def lifespan(app: FastAPI):
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """))
+    # Create daily_report_log for send-once-per-day idempotency
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS daily_report_log (
+                report_date VARCHAR(10) PRIMARY KEY,
+                sent_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """))
     async with async_session() as db:
         await seed_products(db)
     await _seed_admin()
@@ -180,11 +188,7 @@ async def trigger_daily_report(authorization: str = Header(None)):
     if authorization != f"Bearer {expected_token}":
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    from app.services.email_service import send_daily_report_email
-    from app.services.report_service import generate_daily_report
+    from app.services.email_service import send_daily_report_once
 
     async with async_session() as db:
-        report = await generate_daily_report(db)
-        success = await send_daily_report_email(report)
-
-    return {"sent": success, "date": report["date"]}
+        return await send_daily_report_once(db)
