@@ -93,9 +93,11 @@ export function Shifts() {
   const [movementReason, setMovementReason] = useState("");
   const [movementNotes, setMovementNotes] = useState("");
   const [savingMovement, setSavingMovement] = useState(false);
+  const [showMovementModal, setShowMovementModal] = useState(false);
 
   const [shifts, setShifts] = useState<ShiftData[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const loadCurrentShift = async () => {
     setLoadingCurrent(true);
@@ -229,6 +231,7 @@ export function Shifts() {
       setMovementAmount("");
       setMovementReason("");
       setMovementNotes("");
+      setShowMovementModal(false);
       await loadCurrentShift();
       showToast("Movimiento de caja registrado");
     } catch {
@@ -236,6 +239,14 @@ export function Shifts() {
     } finally {
       setSavingMovement(false);
     }
+  };
+
+  const openMovementModal = (type: "in" | "out") => {
+    setMovementType(type);
+    setMovementAmount("");
+    setMovementReason("");
+    setMovementNotes("");
+    setShowMovementModal(true);
   };
 
   const currentExpectedCash =
@@ -306,47 +317,29 @@ export function Shifts() {
               </div>
             </div>
 
-            <div className="card" style={{ marginTop: 16, background: "var(--bg-accent)" }}>
-              <h3 style={{ marginTop: 0, marginBottom: 10 }}>Movimiento de caja</h3>
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <button
-                  type="button"
-                  className={`category-chip ${movementType === "out" ? "active" : ""}`}
-                  onClick={() => setMovementType("out")}
-                >
-                  Salida
-                </button>
-                <button
-                  type="button"
-                  className={`category-chip ${movementType === "in" ? "active" : ""}`}
-                  onClick={() => setMovementType("in")}
-                >
-                  Entrada
-                </button>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 10 }}>
-                <div className="login-field">
-                  <label>Monto</label>
-                  <input type="number" min="0" step="0.01" value={movementAmount} onChange={(e) => setMovementAmount(e.target.value)} />
-                </div>
-                <div className="login-field">
-                  <label>Motivo</label>
-                  <input value={movementReason} onChange={(e) => setMovementReason(e.target.value)} placeholder="Ej. retiro, gasto, cambio, abono..." />
-                </div>
-              </div>
-              <div className="login-field">
-                <label>Notas</label>
-                <input value={movementNotes} onChange={(e) => setMovementNotes(e.target.value)} placeholder="Opcional" />
-              </div>
-              <button className="btn btn-secondary" style={{ width: "100%" }} onClick={handleMovement} disabled={savingMovement}>
-                {savingMovement ? "Guardando..." : "Registrar movimiento"}
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ flex: 1 }}
+                onClick={() => openMovementModal("in")}
+              >
+                + Entrada
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ flex: 1 }}
+                onClick={() => openMovementModal("out")}
+              >
+                − Salida
               </button>
             </div>
 
             {!showCloseForm ? (
               <button
                 className="btn btn-primary"
-                style={{ width: "100%", marginTop: 16 }}
+                style={{ width: "100%", marginTop: 12 }}
                 onClick={() => setShowCloseForm(true)}
               >
                 Cerrar caja
@@ -506,10 +499,15 @@ export function Shifts() {
 
       {isAdmin && (
         <>
-          <h2 className="summary-section-title" style={{ marginTop: 24 }}>
-            Historial de cajas
-          </h2>
-          {loadingHistory ? (
+          <button
+            type="button"
+            className="btn btn-secondary btn-block"
+            style={{ marginTop: 24 }}
+            onClick={() => setShowHistory((prev) => !prev)}
+          >
+            {showHistory ? "Ocultar historial de cajas" : "Ver historial de cajas"}
+          </button>
+          {showHistory && (loadingHistory ? (
             <div className="empty-state">
               <p>Cargando...</p>
             </div>
@@ -564,8 +562,103 @@ export function Shifts() {
                 </div>
               </div>
             ))
-          )}
+          ))}
         </>
+      )}
+
+      {showMovementModal && currentShift && (
+        <div
+          className="product-sheet-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !savingMovement) {
+              setShowMovementModal(false);
+            }
+          }}
+        >
+          <div className="product-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="product-sheet-handle" />
+            <div className="product-sheet-header">
+              <h2 className="product-sheet-title">
+                {movementType === "in" ? "Entrada de caja" : "Salida de caja"}
+              </h2>
+              <button
+                className="product-sheet-close"
+                onClick={() => setShowMovementModal(false)}
+                disabled={savingMovement}
+                aria-label="Cerrar"
+              >
+                ×
+              </button>
+            </div>
+            <div className="product-sheet-body">
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <button
+                  type="button"
+                  className={`category-chip ${movementType === "out" ? "active" : ""}`}
+                  onClick={() => setMovementType("out")}
+                  disabled={savingMovement}
+                >
+                  Salida
+                </button>
+                <button
+                  type="button"
+                  className={`category-chip ${movementType === "in" ? "active" : ""}`}
+                  onClick={() => setMovementType("in")}
+                  disabled={savingMovement}
+                >
+                  Entrada
+                </button>
+              </div>
+
+              <div className="login-field">
+                <label>Monto</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={movementAmount}
+                  onChange={(e) => setMovementAmount(e.target.value)}
+                  disabled={savingMovement}
+                  autoFocus
+                />
+              </div>
+
+              <div className="login-field">
+                <label>Motivo</label>
+                <input
+                  value={movementReason}
+                  onChange={(e) => setMovementReason(e.target.value)}
+                  placeholder={
+                    movementType === "out"
+                      ? "Ej. retiro, gasto, cambio..."
+                      : "Ej. fondo adicional, abono..."
+                  }
+                  disabled={savingMovement}
+                />
+              </div>
+
+              <div className="login-field">
+                <label>Notas (opcional)</label>
+                <input
+                  value={movementNotes}
+                  onChange={(e) => setMovementNotes(e.target.value)}
+                  placeholder="Detalle adicional"
+                  disabled={savingMovement}
+                />
+              </div>
+
+              <button
+                className="btn btn-primary btn-block"
+                onClick={handleMovement}
+                disabled={savingMovement || !movementAmount || !movementReason.trim()}
+              >
+                {savingMovement ? "Guardando..." : "Registrar movimiento"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
