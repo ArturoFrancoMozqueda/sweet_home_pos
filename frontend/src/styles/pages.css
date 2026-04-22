@@ -1097,3 +1097,151 @@
   font-size: 0.85rem;
   color: var(--text);
 }
+
+/* ── Admin Dashboard ───────────────────────────────────────── */
+.dashboard-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.alert-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: var(--bg-card);
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+
+.alert-card:active {
+  transform: scale(0.98);
+}
+
+.alert-card:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.alert-card .alert-text {
+  color: var(--text);
+  font-weight: 600;
+  flex: 1;
+}
+
+.alert-card .alert-action {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.alert-card.alert-warning {
+  background: var(--warning-soft);
+  border-color: rgba(230, 126, 34, 0.25);
+}
+
+.alert-card.alert-warning .alert-action {
+  color: var(--warning);
+}
+
+.alert-card.alert-danger {
+  background: var(--danger-soft);
+  border-color: rgba(231, 76, 60, 0.25);
+}
+
+.alert-card.alert-danger .alert-action {
+  color: var(--danger);
+}
+
+.alert-card.alert-info {
+  background: var(--primary-soft);
+  border-color: rgba(212, 132, 90, 0.25);
+}
+
+.alert-card.alert-info .alert-action {
+  color: var(--primary);
+}
+
+.dashboard-quickstats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.quickstat {
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.quickstat-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.quickstat-value {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.quickstat-sub {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.dashboard-shortcut {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  text-align: left;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+
+.dashboard-shortcut:active {
+  transform: scale(0.97);
+}
+
+.dashboard-shortcut .shortcut-label {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.dashboard-shortcut .shortcut-sub {
+  font-size: 0.78rem;
+  color: var(--text-light);
+  font-weight: 600;
+}

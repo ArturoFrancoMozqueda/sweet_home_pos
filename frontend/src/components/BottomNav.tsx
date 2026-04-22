@@ -3,6 +3,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 const icons = {
+  panel: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+    </svg>
+  ),
   venta: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 5h12M9 21a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z" />
@@ -60,7 +65,7 @@ export function BottomNav() {
   const coreTabs: NavTab[] =
     user?.role === "admin"
       ? [
-          { path: "/", icon: icons.venta, label: "Venta" },
+          { path: "/admin", icon: icons.panel, label: "Panel" },
           { path: "/inventory", icon: icons.inventario, label: "Productos" },
           { path: "/summary", icon: icons.resumen, label: "Resumen" },
           { path: "/history", icon: icons.historial, label: "Historial" },
@@ -75,6 +80,7 @@ export function BottomNav() {
   const secondaryTabs: NavTab[] =
     user?.role === "admin"
       ? [
+          { path: "/", icon: icons.venta, label: "Venta" },
           { path: "/orders", icon: icons.pedidos, label: "Pedidos" },
           { path: "/shifts", icon: icons.turnos, label: "Caja" },
           { path: "/users", icon: icons.usuarios, label: "Usuarios" },
