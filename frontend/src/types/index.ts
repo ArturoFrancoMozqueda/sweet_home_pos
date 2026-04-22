@@ -26,7 +26,7 @@ export interface Sale {
   id?: number;
   client_uuid: string;
   total: number;
-  payment_method: "efectivo" | "transferencia";
+  payment_method: "efectivo" | "transferencia" | "mixto";
   created_at: string;
   items: SaleItem[];
   synced: boolean;

@@ -1,3 +1,4 @@
+import { useEffect, useState, type ReactElement } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -32,43 +33,101 @@ const icons = {
       <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
+  more: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 6h.01M12 12h.01M12 18h.01" />
+    </svg>
+  ),
 };
+
+interface NavTab {
+  path: string;
+  icon: ReactElement;
+  label: string;
+}
 
 export function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [showMore, setShowMore] = useState(false);
 
-  const tabs = [
-    { path: "/",          icon: icons.venta,      label: "Venta"      },
+  const coreTabs: NavTab[] = [
+    { path: "/", icon: icons.venta, label: "Venta" },
     { path: "/inventory", icon: icons.inventario, label: "Inventario" },
-    { path: "/history",   icon: icons.historial,  label: user?.role === "admin" ? "Historial" : "Mis Ventas" },
-    { path: "/shifts",    icon: icons.turnos,     label: "Turnos"     },
-    ...(user?.role === "admin" ? [
-      { path: "/summary", icon: icons.resumen,    label: "Resumen"    },
-      { path: "/users",   icon: icons.usuarios,   label: "Usuarios"   },
-    ] : []),
+    {
+      path: "/history",
+      icon: icons.historial,
+      label: user?.role === "admin" ? "Historial" : "Mis Ventas",
+    },
+    { path: "/shifts", icon: icons.turnos, label: "Turnos" },
   ];
 
+  const secondaryTabs: NavTab[] =
+    user?.role === "admin"
+      ? [
+          { path: "/summary", icon: icons.resumen, label: "Resumen" },
+          { path: "/users", icon: icons.usuarios, label: "Usuarios" },
+        ]
+      : [];
+
+  useEffect(() => {
+    setShowMore(false);
+  }, [location.pathname]);
+
+  const moreActive = secondaryTabs.some((tab) => tab.path === location.pathname);
+
   return (
-    <nav className="bottom-nav" role="navigation" aria-label="Navegación principal">
-      {tabs.map((tab) => {
-        const active = location.pathname === tab.path;
-        return (
+    <>
+      {showMore && <button className="nav-overflow-backdrop" onClick={() => setShowMore(false)} />}
+      {showMore && (
+        <div className="nav-overflow-menu">
+          {secondaryTabs.map((tab) => (
+            <button
+              key={tab.path}
+              className={`nav-overflow-item ${location.pathname === tab.path ? "active" : ""}`}
+              onClick={() => navigate(tab.path)}
+            >
+              <span className="nav-icon">{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <nav className="bottom-nav" role="navigation" aria-label="Navegación principal">
+        {coreTabs.map((tab) => {
+          const active = location.pathname === tab.path;
+          return (
+            <button
+              key={tab.path}
+              className={`nav-item ${active ? "active" : ""}`}
+              onClick={() => navigate(tab.path)}
+              aria-label={tab.label}
+              aria-current={active ? "page" : undefined}
+            >
+              <span className="nav-icon-wrap">
+                <span className="nav-icon">{tab.icon}</span>
+              </span>
+              {tab.label}
+            </button>
+          );
+        })}
+
+        {secondaryTabs.length > 0 && (
           <button
-            key={tab.path}
-            className={`nav-item ${active ? "active" : ""}`}
-            onClick={() => navigate(tab.path)}
-            aria-label={tab.label}
-            aria-current={active ? "page" : undefined}
+            className={`nav-item ${moreActive || showMore ? "active" : ""}`}
+            onClick={() => setShowMore((prev) => !prev)}
+            aria-label="Más"
+            aria-expanded={showMore}
           >
             <span className="nav-icon-wrap">
-              <span className="nav-icon">{tab.icon}</span>
+              <span className="nav-icon">{icons.more}</span>
             </span>
-            {tab.label}
+            Más
           </button>
-        );
-      })}
-    </nav>
+        )}
+      </nav>
+    </>
   );
 }

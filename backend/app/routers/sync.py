@@ -113,10 +113,11 @@ async def sync_sales(
 
     await db.commit()
 
-    # Return updated product list
-    result = await db.execute(
-        select(Product).where(Product.active == True).order_by(Product.name)  # noqa: E712
-    )
+    # Return updated product list. Admin inventory needs inactive products too.
+    product_query = select(Product).order_by(Product.name)
+    if current_user.role != "admin":
+        product_query = product_query.where(Product.active == True)  # noqa: E712
+    result = await db.execute(product_query)
     products = result.scalars().all()
 
     return SyncResponse(synced_uuids=synced_uuids, failed=failed, products=products)

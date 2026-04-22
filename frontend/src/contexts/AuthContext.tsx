@@ -75,3 +75,12 @@ export function useAuth(): AuthContextValue {
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
+
+export function getStoredUser(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    return null;
+  }
+}

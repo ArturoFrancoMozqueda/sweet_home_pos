@@ -21,7 +21,18 @@ async def _get_open_shift(user_id: int, db: AsyncSession) -> Shift | None:
     return result.scalars().first()
 
 
-def _shift_to_response(shift: Shift) -> ShiftResponse:
+async def _calculate_shift_totals(shift_id: int, db: AsyncSession) -> tuple[float, float]:
+    cash_sales, transfer_sales = await _calculate_shift_totals(shift_id, db)
+    return cash_sales, transfer_sales
+
+
+def _shift_to_response(
+    shift: Shift,
+    *,
+    cash_sales: float | None = None,
+    transfer_sales: float | None = None,
+    expected_cash: float | None = None,
+) -> ShiftResponse:
     return ShiftResponse(
         id=shift.id,
         user_id=shift.user_id,
@@ -30,9 +41,9 @@ def _shift_to_response(shift: Shift) -> ShiftResponse:
         closed_at=shift.closed_at,
         opening_cash=float(shift.opening_cash),
         closing_cash=float(shift.closing_cash) if shift.closing_cash is not None else None,
-        expected_cash=float(shift.expected_cash) if shift.expected_cash is not None else None,
-        cash_sales=float(shift.cash_sales) if shift.cash_sales is not None else None,
-        transfer_sales=float(shift.transfer_sales) if shift.transfer_sales is not None else None,
+        expected_cash=expected_cash if expected_cash is not None else (float(shift.expected_cash) if shift.expected_cash is not None else None),
+        cash_sales=cash_sales if cash_sales is not None else (float(shift.cash_sales) if shift.cash_sales is not None else None),
+        transfer_sales=transfer_sales if transfer_sales is not None else (float(shift.transfer_sales) if shift.transfer_sales is not None else None),
         variance=float(shift.variance) if shift.variance is not None else None,
         notes=shift.notes,
     )
@@ -56,7 +67,12 @@ async def open_shift(
     db.add(shift)
     await db.commit()
     await db.refresh(shift, attribute_names=["user"])
-    return _shift_to_response(shift)
+    return _shift_to_response(
+        shift,
+        cash_sales=0.0,
+        transfer_sales=0.0,
+        expected_cash=float(shift.opening_cash),
+    )
 
 
 @router.post("/{shift_id}/close", response_model=ShiftResponse)
@@ -114,7 +130,12 @@ async def close_shift(
 
     await db.commit()
     await db.refresh(shift, attribute_names=["user"])
-    return _shift_to_response(shift)
+    return _shift_to_response(
+        shift,
+        cash_sales=cash_sales,
+        transfer_sales=transfer_sales,
+        expected_cash=expected_cash,
+    )
 
 
 @router.get("/me/current", response_model=ShiftResponse | None)
@@ -126,7 +147,14 @@ async def get_current_shift(
     if not shift:
         return None
     await db.refresh(shift, attribute_names=["user"])
-    return _shift_to_response(shift)
+    cash_sales, transfer_sales = await _calculate_shift_totals(shift.id, db)
+    expected_cash = float(shift.opening_cash) + cash_sales
+    return _shift_to_response(
+        shift,
+        cash_sales=cash_sales,
+        transfer_sales=transfer_sales,
+        expected_cash=expected_cash,
+    )
 
 
 @router.get("", response_model=list[ShiftResponse])

@@ -144,12 +144,8 @@ async def get_sales(
     if not (include_cancelled and current_user.role == "admin"):
         query = query.where(Sale.cancelled == False)  # noqa: E712
 
-    # Employees only see their own sales for today
+    # Employees only see their own sales, but the UI date filters should still work.
     if current_user.role == "employee":
-        tz = ZoneInfo(settings.timezone)
-        today_str = datetime.now(tz).strftime("%Y-%m-%d")
-        date_from = today_str
-        date_to = today_str
         query = query.where(Sale.user_id == current_user.id)
 
     tz = ZoneInfo(settings.timezone)

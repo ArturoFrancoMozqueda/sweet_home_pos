@@ -111,8 +111,12 @@ export function Inventory() {
     const price = parseFloat(formPrice);
     const stock = parseInt(formStock, 10);
     const threshold = parseInt(formThreshold, 10);
-    if (!name || isNaN(price) || price < 0) {
-      setFormError("Nombre y precio son requeridos");
+    if (!name) {
+      setFormError("El nombre es obligatorio");
+      return;
+    }
+    if (isNaN(price) || price <= 0) {
+      setFormError("El precio debe ser mayor a $0.00");
       return;
     }
     setFormSaving(true);
@@ -160,12 +164,12 @@ export function Inventory() {
   };
 
   const adjustStock = async (productId: number, delta: number) => {
-    // Typed-but-uncommitted input should not linger once +/- is used.
-    clearStockDraft(productId);
     if (!navigator.onLine) {
-      showToast("Se requiere conexión para ajustar stock");
+      showToast("Sin conexión: el cambio escrito se conservará hasta que puedas guardarlo");
       return;
     }
+    // Typed-but-uncommitted input should not linger once +/- is used.
+    clearStockDraft(productId);
     const product = await db.products.get(productId);
     if (!product) return;
     const newStock = Math.max(0, product.stock + delta);
@@ -201,8 +205,7 @@ export function Inventory() {
     }
 
     if (!navigator.onLine) {
-      clearStockDraft(productId);
-      showToast("Se requiere conexión para ajustar stock");
+      showToast("Sin conexión: el cambio se quedó escrito, pero no se puede guardar todavía");
       return;
     }
 
@@ -274,6 +277,11 @@ export function Inventory() {
                     )}
                   </div>
                   <div className="inventory-price">${product.price}</div>
+                  {!navigator.onLine && stockDrafts[product.id] !== undefined && (
+                    <div style={{ fontSize: "0.75rem", color: "var(--warning)", marginTop: 4 }}>
+                      Cambio pendiente: reconéctate para guardarlo.
+                    </div>
+                  )}
                 </div>
                 {!readOnly && (
                   <button
@@ -468,7 +476,13 @@ export function Inventory() {
                   type="submit"
                   className="btn btn-primary"
                   style={{ width: "100%", marginTop: 8 }}
-                  disabled={formSaving || formUploading || !formName.trim() || !formPrice}
+                  disabled={
+                    formSaving ||
+                    formUploading ||
+                    !formName.trim() ||
+                    !formPrice ||
+                    (parseFloat(formPrice) || 0) <= 0
+                  }
                 >
                   {formUploading ? "Subiendo imagen..." : formSaving ? "Guardando..." : "Guardar"}
                 </button>

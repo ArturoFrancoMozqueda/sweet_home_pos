@@ -1,5 +1,6 @@
-import { db, type DBProduct } from "./database";
+import { getStoredUser } from "../contexts/AuthContext";
 import { api } from "../services/api";
+import { db, type DBProduct } from "./database";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -21,7 +22,7 @@ async function fetchImageAsBase64(url: string): Promise<string | undefined> {
 }
 
 // Stop caching new images once we're above this fraction of the origin quota.
-// Sale writes need headroom — losing a sale to a full cache is unacceptable.
+// Sale writes need headroom â€” losing a sale to a full cache is unacceptable.
 const IMAGE_CACHE_QUOTA_CEILING = 0.75;
 
 async function isStorageBelowCeiling(): Promise<boolean> {
@@ -56,11 +57,49 @@ async function cacheProductImages(products: DBProduct[]): Promise<void> {
     try {
       await db.products.update(product.id, { image_data: base64 });
     } catch (err) {
-      // QuotaExceededError or similar — give up for this sync pass; don't retry now.
+      // QuotaExceededError or similar â€” give up for this sync pass; don't retry now.
       console.warn("Failed to cache product image (storage?):", err);
       return;
     }
   }
+}
+
+function mapServerProducts(products: any[], existingProducts: DBProduct[]): DBProduct[] {
+  const imageDataMap = new Map(
+    existingProducts
+      .filter((p) => p.image_data)
+      .map((p) => [p.id, p.image_data])
+  );
+
+  return products.map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    price: p.price,
+    stock: p.stock,
+    low_stock_threshold: p.low_stock_threshold,
+    active: p.active,
+    cost_price: p.cost_price,
+    image_url: p.image_url,
+    image_data: imageDataMap.get(p.id),
+  }));
+}
+
+async function replaceProducts(products: any[]): Promise<void> {
+  const existingProducts = await db.products.toArray();
+  const updatedProducts = mapServerProducts(products, existingProducts);
+
+  await db.transaction("rw", db.products, async () => {
+    await db.products.clear();
+    await db.products.bulkPut(updatedProducts);
+  });
+
+  cacheProductImages(updatedProducts).catch(() => {});
+}
+
+function getProductsEndpoint(): string {
+  const storedUser = getStoredUser();
+  const activeOnly = storedUser?.role === "admin" ? "false" : "true";
+  return `/api/products?active_only=${activeOnly}`;
 }
 
 export interface SyncResult {
@@ -71,23 +110,19 @@ export interface SyncResult {
 
 export async function syncToServer(): Promise<SyncResult> {
   try {
-    // Get unsynced sales (synced=0 only — synced=2 means server already rejected)
+    // Get unsynced sales (synced=0 only â€” synced=2 means server already rejected)
     const unsyncedSales = await db.sales.where("synced").equals(0).toArray();
     if (unsyncedSales.length === 0) {
-      // Still fetch latest products
       await refreshProducts();
       return { ok: true, syncedCount: 0, failedCount: 0 };
     }
 
-    // Build sync payload
     const salesPayload = await Promise.all(
       unsyncedSales.map(async (sale) => {
         const items = await db.saleItems
           .where("sale_uuid")
           .equals(sale.client_uuid)
           .toArray();
-        // Defensive: older rows from a pre-v6 upgrade should already have been
-        // migrated, but fall back just in case to avoid sending an invalid payload.
         const payments =
           Array.isArray(sale.payments) && sale.payments.length > 0
             ? sale.payments
@@ -138,34 +173,8 @@ export async function syncToServer(): Promise<SyncResult> {
       console.warn(`Sync: ${failures.length} sale(s) rejected by server`, failures);
     }
 
-    // Update products from server — preserve local image_data
     if (response.products) {
-      const existingProducts = await db.products.toArray();
-      const imageDataMap = new Map(
-        existingProducts
-          .filter((p) => p.image_data)
-          .map((p) => [p.id, p.image_data])
-      );
-
-      const updatedProducts: DBProduct[] = response.products.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        price: p.price,
-        stock: p.stock,
-        low_stock_threshold: p.low_stock_threshold,
-        active: p.active,
-        cost_price: p.cost_price,
-        image_url: p.image_url,
-        image_data: imageDataMap.get(p.id),
-      }));
-
-      await db.transaction("rw", db.products, async () => {
-        await db.products.clear();
-        await db.products.bulkPut(updatedProducts);
-      });
-
-      // Download images for products that have image_url but no local cache
-      cacheProductImages(updatedProducts).catch(() => {});
+      await replaceProducts(response.products);
     }
 
     return {
@@ -181,33 +190,9 @@ export async function syncToServer(): Promise<SyncResult> {
 
 export async function refreshProducts(): Promise<boolean> {
   try {
-    const products = await api.get("/api/products");
+    const products = await api.get(getProductsEndpoint());
     if (Array.isArray(products)) {
-      const existingProducts = await db.products.toArray();
-      const imageDataMap = new Map(
-        existingProducts
-          .filter((p) => p.image_data)
-          .map((p) => [p.id, p.image_data])
-      );
-
-      const updatedProducts: DBProduct[] = products.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        price: p.price,
-        stock: p.stock,
-        low_stock_threshold: p.low_stock_threshold,
-        active: p.active,
-        cost_price: p.cost_price,
-        image_url: p.image_url,
-        image_data: imageDataMap.get(p.id),
-      }));
-
-      await db.transaction("rw", db.products, async () => {
-        await db.products.clear();
-        await db.products.bulkPut(updatedProducts);
-      });
-
-      cacheProductImages(updatedProducts).catch(() => {});
+      await replaceProducts(products);
     }
     return true;
   } catch {
