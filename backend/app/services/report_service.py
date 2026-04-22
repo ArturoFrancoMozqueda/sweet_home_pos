@@ -29,6 +29,18 @@ def _today_range(date_str: str | None = None):
     )
 
 
+def _date_range_bounds(date_from: str, date_to: str):
+    tz = ZoneInfo(settings.timezone)
+    start_day = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=tz)
+    end_day = datetime.strptime(date_to, "%Y-%m-%d").replace(tzinfo=tz)
+    start = start_day.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = end_day.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return (
+        start.astimezone(timezone.utc).replace(tzinfo=None),
+        end.astimezone(timezone.utc).replace(tzinfo=None),
+    )
+
+
 async def generate_daily_report(
     db: AsyncSession,
     date_str: str | None = None,
@@ -175,4 +187,95 @@ async def generate_daily_report(
         "top_products": top_products,
         "low_stock_products": low_stock,
         "sales_by_user": sales_by_user,
+    }
+
+
+async def generate_range_report(
+    db: AsyncSession,
+    date_from: str,
+    date_to: str,
+    *,
+    top_n: int = 10,
+) -> dict:
+    """Admin-only analytics over an inclusive date range.
+
+    Returns totals, a per-day time series for sales, the top-N products by
+    quantity, and payment breakdown. No per-user or low-stock sections —
+    those belong in the daily summary.
+    """
+    start, end = _date_range_bounds(date_from, date_to)
+    tz = ZoneInfo(settings.timezone)
+
+    base_where = (
+        Sale.created_at >= start,
+        Sale.created_at <= end,
+        Sale.cancelled == False,  # noqa: E712
+    )
+
+    # Totals
+    totals_row = (
+        await db.execute(
+            select(func.count(Sale.id), func.coalesce(func.sum(Sale.total), 0)).where(*base_where)
+        )
+    ).one()
+    total_sales_count = int(totals_row[0])
+    total_amount = float(totals_row[1])
+
+    # Per-day time series. We bucket by the Mexico-local date of each sale
+    # so the series matches what the user sees in the UI.
+    daily_rows = (
+        await db.execute(
+            select(Sale.created_at, Sale.total).where(*base_where).order_by(Sale.created_at)
+        )
+    ).all()
+    daily_map: dict[str, dict] = {}
+    for created_at, total in daily_rows:
+        local_date = (
+            created_at.replace(tzinfo=timezone.utc).astimezone(tz).strftime("%Y-%m-%d")
+        )
+        bucket = daily_map.setdefault(local_date, {"date": local_date, "count": 0, "total": 0.0})
+        bucket["count"] += 1
+        bucket["total"] += float(total)
+    sales_by_day = sorted(daily_map.values(), key=lambda b: b["date"])
+
+    # Payment breakdown
+    payment_rows = (
+        await db.execute(
+            select(SalePayment.method, func.count(SalePayment.id), func.sum(SalePayment.amount))
+            .join(Sale, SalePayment.sale_id == Sale.id)
+            .where(*base_where)
+            .group_by(SalePayment.method)
+        )
+    ).all()
+    payment_breakdown = [
+        {"method": r[0], "count": r[1], "total": float(r[2])} for r in payment_rows
+    ]
+
+    # Top products
+    top_rows = (
+        await db.execute(
+            select(
+                SaleItem.product_name,
+                func.sum(SaleItem.quantity),
+                func.sum(SaleItem.subtotal),
+            )
+            .join(Sale, SaleItem.sale_id == Sale.id)
+            .where(*base_where)
+            .group_by(SaleItem.product_name)
+            .order_by(func.sum(SaleItem.quantity).desc())
+            .limit(top_n)
+        )
+    ).all()
+    top_products = [
+        {"name": r[0], "quantity": int(r[1]), "revenue": float(r[2])} for r in top_rows
+    ]
+
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "total_sales_count": total_sales_count,
+        "total_amount": total_amount,
+        "sales_by_day": sales_by_day,
+        "payment_breakdown": payment_breakdown,
+        "top_products": top_products,
     }
