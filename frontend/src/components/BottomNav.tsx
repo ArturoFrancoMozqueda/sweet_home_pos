@@ -57,22 +57,26 @@ export function BottomNav() {
   const { user } = useAuth();
   const [showMore, setShowMore] = useState(false);
 
-  const coreTabs: NavTab[] = [
-    { path: "/", icon: icons.venta, label: "Venta" },
-    { path: "/orders", icon: icons.pedidos, label: "Pedidos" },
-    { path: "/shifts", icon: icons.turnos, label: "Caja" },
-    {
-      path: "/history",
-      icon: icons.historial,
-      label: user?.role === "admin" ? "Historial" : "Mis Ventas",
-    },
-  ];
+  const coreTabs: NavTab[] =
+    user?.role === "admin"
+      ? [
+          { path: "/", icon: icons.venta, label: "Venta" },
+          { path: "/inventory", icon: icons.inventario, label: "Productos" },
+          { path: "/summary", icon: icons.resumen, label: "Resumen" },
+          { path: "/history", icon: icons.historial, label: "Historial" },
+        ]
+      : [
+          { path: "/", icon: icons.venta, label: "Venta" },
+          { path: "/orders", icon: icons.pedidos, label: "Pedidos" },
+          { path: "/shifts", icon: icons.turnos, label: "Caja" },
+          { path: "/history", icon: icons.historial, label: "Mis Ventas" },
+        ];
 
   const secondaryTabs: NavTab[] =
     user?.role === "admin"
       ? [
-          { path: "/inventory", icon: icons.inventario, label: "Productos" },
-          { path: "/summary", icon: icons.resumen, label: "Resumen" },
+          { path: "/orders", icon: icons.pedidos, label: "Pedidos" },
+          { path: "/shifts", icon: icons.turnos, label: "Caja" },
           { path: "/users", icon: icons.usuarios, label: "Usuarios" },
         ]
       : [{ path: "/inventory", icon: icons.inventario, label: "Productos" }];
