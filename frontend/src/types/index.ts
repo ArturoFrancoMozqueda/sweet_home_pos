@@ -46,6 +46,16 @@ export interface DailyReport {
   sales_by_user?: { user_id: number | null; username: string; count: number; total: number }[];
 }
 
+export interface RangeReport {
+  date_from: string;
+  date_to: string;
+  total_sales_count: number;
+  total_amount: number;
+  sales_by_day: { date: string; count: number; total: number }[];
+  payment_breakdown: { method: string; count: number; total: number }[];
+  top_products: { name: string; quantity: number; revenue: number }[];
+}
+
 export interface OrderRecord {
   id: number;
   user_id: number;

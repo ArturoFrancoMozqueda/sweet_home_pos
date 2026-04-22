@@ -6,6 +6,7 @@ import { api } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../components/Toast";
 import { getPaymentMethodLabel } from "../utils/payments";
+import { AdminHistoryView } from "./AdminHistoryView";
 
 function toUtcDate(dateStr: string): Date {
   if (!dateStr.endsWith("Z") && !dateStr.includes("+")) {
@@ -53,10 +54,13 @@ export function SalesHistory() {
   const [cancelling, setCancelling] = useState(false);
   const [retryingUuid, setRetryingUuid] = useState<string | null>(null);
   const [discardingUuid, setDiscardingUuid] = useState<string | null>(null);
+  const [adminManageMode, setAdminManageMode] = useState(false);
 
   const isAdmin = user?.role === "admin";
+  const showAdminAnalytics = isAdmin && !adminManageMode;
 
   useEffect(() => {
+    if (showAdminAnalytics) return;
     if (!navigator.onLine) return;
     setLoading(true);
     const qs = new URLSearchParams();
@@ -71,7 +75,7 @@ export function SalesHistory() {
       .then((data: ServerSale[]) => setServerSales(data))
       .catch(() => setServerSales([]))
       .finally(() => setLoading(false));
-  }, [dateFilter, isAdmin]);
+  }, [dateFilter, isAdmin, showAdminAnalytics]);
 
   const localUnsynced = useLiveQuery(async () => {
     const all = await db.sales.orderBy("created_at").reverse().toArray();
@@ -263,6 +267,10 @@ export function SalesHistory() {
     );
   };
 
+  if (showAdminAnalytics) {
+    return <AdminHistoryView onOpenManage={() => setAdminManageMode(true)} />;
+  }
+
   return (
     <div className="page">
       <div
@@ -274,15 +282,25 @@ export function SalesHistory() {
         }}
       >
         <h1 className="page-title" style={{ margin: 0 }}>
-          {isAdmin ? "Historial de Ventas" : "Mis Ventas"}
+          {isAdmin ? "Gestionar ventas" : "Mis Ventas"}
         </h1>
-        <button
-          className="btn btn-secondary"
-          style={{ padding: "8px 14px", minHeight: "auto", fontSize: "0.85rem" }}
-          onClick={logout}
-        >
-          Cerrar sesión
-        </button>
+        {isAdmin ? (
+          <button
+            className="btn btn-secondary"
+            style={{ padding: "8px 14px", minHeight: "auto", fontSize: "0.85rem" }}
+            onClick={() => setAdminManageMode(false)}
+          >
+            ← Análisis
+          </button>
+        ) : (
+          <button
+            className="btn btn-secondary"
+            style={{ padding: "8px 14px", minHeight: "auto", fontSize: "0.85rem" }}
+            onClick={logout}
+          >
+            Cerrar sesión
+          </button>
+        )}
       </div>
 
       <div className="history-date-filter">

@@ -1245,3 +1245,31 @@
   color: var(--text-light);
   font-weight: 600;
 }
+
+/* ── Range preset buttons (Historial) ──────────────────────── */
+.range-presets {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.range-preset {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.range-preset.active {
+  background: var(--primary-gradient);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(212, 132, 90, 0.3);
+}
