@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
-from app.routers.auth import require_admin
+from app.routers.auth import get_current_user, require_admin
 from app.services.report_service import generate_daily_report
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -12,11 +12,12 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 @router.get("/daily")
 async def get_daily_report(
     date: str | None = None,
-    _: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get daily report. If no date provided, returns today's report (Mexico City time)."""
-    return await generate_daily_report(db, date)
+    """Daily report. Employees see only their own sales; admins see the
+    full aggregate plus a per-vendor breakdown."""
+    return await generate_daily_report(db, date, user=user)
 
 
 @router.post("/send-test")
