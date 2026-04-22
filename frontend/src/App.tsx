@@ -38,10 +38,10 @@ function AuthenticatedApp({ user }: { user: import("./contexts/AuthContext").Aut
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/history" element={<SalesHistory />} />
         <Route path="/shifts" element={<Shifts />} />
+        <Route path="/summary" element={<DailySummary />} />
         {user.role === "admin" && (
           <>
             <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/summary" element={<DailySummary />} />
             <Route path="/users" element={<Users />} />
           </>
         )}

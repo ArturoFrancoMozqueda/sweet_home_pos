@@ -74,7 +74,7 @@ export function BottomNav() {
           { path: "/", icon: icons.venta, label: "Venta" },
           { path: "/orders", icon: icons.pedidos, label: "Pedidos" },
           { path: "/shifts", icon: icons.turnos, label: "Caja" },
-          { path: "/history", icon: icons.historial, label: "Mis Ventas" },
+          { path: "/summary", icon: icons.resumen, label: "Resumen" },
         ];
 
   const secondaryTabs: NavTab[] =

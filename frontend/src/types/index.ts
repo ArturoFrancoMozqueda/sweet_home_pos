@@ -43,6 +43,7 @@ export interface DailyReport {
   payment_breakdown: { method: string; count: number; total: number }[];
   top_products: { name: string; quantity: number; revenue: number }[];
   low_stock_products: { name: string; stock: number; threshold: number }[];
+  sales_by_user?: { user_id: number | null; username: string; count: number; total: number }[];
 }
 
 export interface OrderRecord {

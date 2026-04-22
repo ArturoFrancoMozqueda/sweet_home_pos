@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
+import { useNavigate } from "react-router-dom";
 import { db, type DBSale, type DBSaleItem } from "../db/database";
 import type { DailyReport } from "../types";
 import { api } from "../services/api";
 import { getSalePaymentEntries, getPaymentMethodLabel } from "../utils/payments";
+import { useAuth, type AuthUser } from "../contexts/AuthContext";
+import { useOnlineStatus } from "../hooks/useOnlineStatus";
 
 function getTodayStr(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
@@ -16,7 +19,8 @@ function toMexicoDateStr(utcStr: string): string {
 function mergeUnsyncedIntoReport(
   serverReport: DailyReport,
   pendingSales: DBSale[],
-  pendingItems: DBSaleItem[]
+  pendingItems: DBSaleItem[],
+  currentUser?: AuthUser | null
 ): DailyReport {
   if (pendingSales.length === 0) return serverReport;
 
@@ -46,6 +50,29 @@ function mergeUnsyncedIntoReport(
     });
   }
 
+  // Local pending sales belong to the currently logged-in user. Add them
+  // to that user's row in the per-vendor breakdown so admins see the real
+  // day total even before sync completes.
+  let salesByUser = serverReport.sales_by_user;
+  if (salesByUser && currentUser) {
+    const byUserMap = new Map(
+      salesByUser.map((r) => [r.user_id ?? -1, { ...r }])
+    );
+    const key = currentUser.id;
+    const prev = byUserMap.get(key) ?? {
+      user_id: currentUser.id,
+      username: currentUser.username,
+      count: 0,
+      total: 0,
+    };
+    byUserMap.set(key, {
+      ...prev,
+      count: prev.count + pendingSales.length,
+      total: prev.total + extraAmount,
+    });
+    salesByUser = Array.from(byUserMap.values()).sort((a, b) => b.total - a.total);
+  }
+
   return {
     ...serverReport,
     total_sales_count: serverReport.total_sales_count + pendingSales.length,
@@ -54,13 +81,28 @@ function mergeUnsyncedIntoReport(
     top_products: Array.from(productMap, ([name, data]) => ({ name, ...data }))
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 5),
+    sales_by_user: salesByUser,
   };
 }
 
 export function DailySummary() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { triggerSync, isSyncing } = useOnlineStatus();
   const [report, setReport] = useState<DailyReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(getTodayStr);
+
+  const pendingCount = useLiveQuery(
+    () => db.sales.where("synced").equals(0).count(),
+    [],
+    0
+  );
+  const failedCount = useLiveQuery(
+    () => db.sales.where("synced").equals(2).count(),
+    [],
+    0
+  );
 
   const localSales = useLiveQuery(async () => {
     const allSales = await db.sales.toArray();
@@ -123,7 +165,7 @@ export function DailySummary() {
             pendingUuids.has(item.sale_uuid)
           );
 
-          setReport(mergeUnsyncedIntoReport(data, pendingSales, pendingItems));
+          setReport(mergeUnsyncedIntoReport(data, pendingSales, pendingItems, user));
           setLoading(false);
           return;
         } catch {
@@ -137,7 +179,7 @@ export function DailySummary() {
     fetchReport().catch(() => {
       setLoading(false);
     });
-  }, [selectedDate, localSaleItems, localSales]);
+  }, [selectedDate, localSaleItems, localSales, user]);
 
   const attentionItems = useMemo(() => {
     if (!report) return [];
@@ -156,10 +198,13 @@ export function DailySummary() {
       .slice(0, 4);
   }, [report]);
 
+  const title = user?.role === "employee" ? "Mi Resumen" : "Resumen del Día";
+  const hasSyncAlerts = pendingCount > 0 || failedCount > 0;
+
   if (loading) {
     return (
       <div className="page">
-        <h1 className="page-title">Resumen del Día</h1>
+        <h1 className="page-title">{title}</h1>
         <div className="empty-state">
           <p>Cargando...</p>
         </div>
@@ -170,7 +215,7 @@ export function DailySummary() {
   if (!report) {
     return (
       <div className="page">
-        <h1 className="page-title">Resumen del Día</h1>
+        <h1 className="page-title">{title}</h1>
         <div className="empty-state">
           <p style={{ fontSize: "2rem" }}>📊</p>
           <p>No hay datos disponibles.</p>
@@ -185,7 +230,7 @@ export function DailySummary() {
         style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}
       >
         <h1 className="page-title" style={{ margin: 0 }}>
-          Resumen del Día
+          {title}
         </h1>
         <button
           className="btn btn-secondary no-print"
@@ -216,6 +261,49 @@ export function DailySummary() {
           Hoy
         </button>
       </div>
+
+      {hasSyncAlerts && (
+        <div className="dashboard-alerts no-print">
+          {pendingCount > 0 && (
+            <button
+              className="alert-card alert-warning"
+              onClick={triggerSync}
+              disabled={isSyncing}
+              type="button"
+            >
+              <span className="alert-text">
+                {pendingCount} venta{pendingCount !== 1 ? "s" : ""} pendiente
+                {pendingCount !== 1 ? "s" : ""} de sincronizar
+              </span>
+              <span className="alert-action">
+                {isSyncing ? "Sincronizando..." : "Sincronizar"}
+              </span>
+            </button>
+          )}
+          {failedCount > 0 && user?.role === "admin" && (
+            <button
+              className="alert-card alert-danger"
+              onClick={() => navigate("/history")}
+              type="button"
+            >
+              <span className="alert-text">
+                {failedCount} venta{failedCount !== 1 ? "s" : ""} rechazada
+                {failedCount !== 1 ? "s" : ""}
+              </span>
+              <span className="alert-action">Ver en Historial →</span>
+            </button>
+          )}
+          {failedCount > 0 && user?.role !== "admin" && (
+            <div className="alert-card alert-danger" style={{ cursor: "default" }}>
+              <span className="alert-text">
+                {failedCount} venta{failedCount !== 1 ? "s" : ""} rechazada
+                {failedCount !== 1 ? "s" : ""}
+              </span>
+              <span className="alert-action">Avisa a tu admin</span>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="summary-hero">
         <div className="summary-label">Total Vendido</div>
@@ -314,6 +402,29 @@ export function DailySummary() {
                   </span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {report.sales_by_user && report.sales_by_user.length > 0 && (
+            <div className="summary-section">
+              <h3 className="summary-section-title">Ventas por Vendedor</h3>
+              <div className="card" style={{ padding: "4px 16px" }}>
+                {report.sales_by_user.map((u, i) => (
+                  <div key={`${u.user_id ?? "none"}-${i}`} className="summary-row">
+                    <span className="summary-row-label">
+                      <span className="summary-rank">{i + 1}</span>
+                      {u.username}
+                      <span className="summary-row-qty">
+                        {" "}
+                        {u.count} venta{u.count !== 1 ? "s" : ""}
+                      </span>
+                    </span>
+                    <span className="summary-row-value">
+                      ${u.total.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </>
