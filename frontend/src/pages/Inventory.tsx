@@ -24,6 +24,8 @@ export function Inventory() {
   const [formStock, setFormStock] = useState("0");
   const [formThreshold, setFormThreshold] = useState("5");
   const [formActive, setFormActive] = useState(true);
+  const [formCategory, setFormCategory] = useState("");
+  const [formFavorite, setFormFavorite] = useState(false);
   const [formCostPrice, setFormCostPrice] = useState("");
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formImagePreview, setFormImagePreview] = useState("");
@@ -37,7 +39,8 @@ export function Inventory() {
 
   const openCreate = () => {
     setFormName(""); setFormPrice(""); setFormCostPrice(""); setFormStock("0");
-    setFormThreshold("5"); setFormActive(true); setFormImageUrl(""); setFormImagePreview(""); setFormImageData(""); setFormError("");
+    setFormThreshold("5"); setFormActive(true); setFormCategory(""); setFormFavorite(false);
+    setFormImageUrl(""); setFormImagePreview(""); setFormImageData(""); setFormError("");
     setEditTarget(null);
     setMode("create");
   };
@@ -48,6 +51,8 @@ export function Inventory() {
     setFormStock(String(product.stock));
     setFormThreshold(String(product.low_stock_threshold));
     setFormActive(product.active);
+    setFormCategory(product.category || "");
+    setFormFavorite(!!product.is_favorite);
     setFormCostPrice(product.cost_price != null ? String(product.cost_price) : "");
     setFormImageUrl(product.image_url || "");
     setFormImagePreview(product.image_data || "");
@@ -130,20 +135,24 @@ export function Inventory() {
           stock: isNaN(stock) ? 0 : stock,
           low_stock_threshold: isNaN(threshold) ? 5 : threshold,
           active: true,
+          category: formCategory.trim() || null,
+          is_favorite: formFavorite,
           cost_price: costPrice,
           image_url: imageUrl,
         });
-        await db.products.put({ id: p.id, name: p.name, price: p.price, stock: p.stock, low_stock_threshold: p.low_stock_threshold, active: p.active, cost_price: p.cost_price, image_url: p.image_url, image_data: formImageData || undefined });
+        await db.products.put({ id: p.id, name: p.name, price: p.price, stock: p.stock, low_stock_threshold: p.low_stock_threshold, active: p.active, category: p.category, is_favorite: p.is_favorite, cost_price: p.cost_price, image_url: p.image_url, image_data: formImageData || undefined });
         showToast("Producto creado");
       } else if (editTarget) {
         const p = await api.put(`/api/products/${editTarget.id}`, {
           name, price,
           low_stock_threshold: isNaN(threshold) ? 5 : threshold,
           active: formActive,
+          category: formCategory.trim() || null,
+          is_favorite: formFavorite,
           cost_price: costPrice,
           image_url: imageUrl,
         });
-        await db.products.update(editTarget.id, { name: p.name, price: p.price, low_stock_threshold: p.low_stock_threshold, active: p.active, cost_price: p.cost_price, image_url: p.image_url, image_data: formImageData || undefined });
+        await db.products.update(editTarget.id, { name: p.name, price: p.price, low_stock_threshold: p.low_stock_threshold, active: p.active, category: p.category, is_favorite: p.is_favorite, cost_price: p.cost_price, image_url: p.image_url, image_data: formImageData || undefined });
         showToast("Producto actualizado");
       }
       closeForm();
@@ -232,7 +241,7 @@ export function Inventory() {
     <div className="page">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <h1 className="page-title" style={{ margin: 0 }}>
-          Inventario
+          Productos
           {readOnly && <span style={{ fontSize: "0.75rem", fontWeight: 400, color: "var(--text-light)", marginLeft: 8 }}>(solo lectura)</span>}
         </h1>
         {!readOnly && (
@@ -263,6 +272,7 @@ export function Inventory() {
               <div key={product.id} className="inventory-item" style={{ opacity: product.active ? 1 : 0.45 }}>
                 <div className="inventory-info">
                   <div className="inventory-name">
+                    {product.is_favorite && <span style={{ marginRight: 6, color: "#d97706" }}>★</span>}
                     {product.name}
                     {!product.active && (
                       <span style={{ marginLeft: 8, fontSize: "0.72rem", color: "var(--text-light)", fontWeight: 500 }}>inactivo</span>
@@ -276,7 +286,14 @@ export function Inventory() {
                       </span>
                     )}
                   </div>
-                  <div className="inventory-price">${product.price}</div>
+                  <div className="inventory-price">
+                    ${product.price}
+                    {product.category && (
+                      <span style={{ marginLeft: 8, fontSize: "0.75rem", color: "var(--text-light)" }}>
+                        {product.category}
+                      </span>
+                    )}
+                  </div>
                   {!navigator.onLine && stockDrafts[product.id] !== undefined && (
                     <div style={{ fontSize: "0.75rem", color: "var(--warning)", marginTop: 4 }}>
                       Cambio pendiente: reconéctate para guardarlo.
@@ -398,6 +415,29 @@ export function Inventory() {
                     min="0"
                     disabled={formSaving}
                   />
+                </div>
+                <div className="login-field">
+                  <label>Categoría <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 400 }}>opcional</span></label>
+                  <input
+                    type="text"
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value)}
+                    placeholder="Ej. Pasteles, Galletas, Bebidas"
+                    disabled={formSaving}
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <input
+                    type="checkbox"
+                    id="product-favorite"
+                    checked={formFavorite}
+                    onChange={(e) => setFormFavorite(e.target.checked)}
+                    disabled={formSaving}
+                    style={{ width: 18, height: 18, cursor: "pointer" }}
+                  />
+                  <label htmlFor="product-favorite" style={{ margin: 0, fontSize: "0.9rem", cursor: "pointer" }}>
+                    Marcar como favorito para venta rápida
+                  </label>
                 </div>
                 <div className="login-field">
                   <label>Costo ($) <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 400 }}>opcional</span></label>

@@ -5,6 +5,8 @@ export interface Product {
   stock: number;
   low_stock_threshold: number;
   active: boolean;
+  category?: string;
+  is_favorite?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -41,4 +43,20 @@ export interface DailyReport {
   payment_breakdown: { method: string; count: number; total: number }[];
   top_products: { name: string; quantity: number; revenue: number }[];
   low_stock_products: { name: string; stock: number; threshold: number }[];
+}
+
+export interface OrderRecord {
+  id: number;
+  user_id: number;
+  username: string;
+  customer_name: string;
+  customer_phone?: string | null;
+  pickup_at: string;
+  status: "new" | "in_production" | "ready" | "delivered" | "cancelled";
+  total_amount: number;
+  deposit_amount: number;
+  balance_due: number;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
 }

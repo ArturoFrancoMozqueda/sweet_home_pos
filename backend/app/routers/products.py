@@ -69,7 +69,7 @@ async def update_product(
     product = result.scalars().first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-    for field, value in data.model_dump(exclude_none=True).items():
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(product, field, value)
     await db.commit()
     await db.refresh(product)

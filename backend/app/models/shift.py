@@ -19,6 +19,8 @@ class Shift(Base):
     expected_cash: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
     cash_sales: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
     transfer_sales: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
+    cash_in: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
+    cash_out: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
     variance: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 

@@ -13,6 +13,11 @@ const icons = {
       <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
     </svg>
   ),
+  pedidos: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 12h6m-6 4h6M9 8h6m-9 12h12a2 2 0 002-2V6l-4-4H6a2 2 0 00-2 2v14a2 2 0 002 2z" />
+    </svg>
+  ),
   resumen: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -31,6 +36,11 @@ const icons = {
   turnos: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  movimientos: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M13 7h8m0 0l-3-3m3 3l-3 3M11 17H3m0 0l3-3m-3 3l3 3M7 7H3m0 0l3-3M3 7l3 3m12 7h3m0 0l-3-3m3 3l-3 3" />
     </svg>
   ),
   more: (
@@ -54,22 +64,24 @@ export function BottomNav() {
 
   const coreTabs: NavTab[] = [
     { path: "/", icon: icons.venta, label: "Venta" },
-    { path: "/inventory", icon: icons.inventario, label: "Inventario" },
+    { path: "/orders", icon: icons.pedidos, label: "Pedidos" },
+    { path: "/shifts", icon: icons.turnos, label: "Caja" },
     {
       path: "/history",
       icon: icons.historial,
       label: user?.role === "admin" ? "Historial" : "Mis Ventas",
     },
-    { path: "/shifts", icon: icons.turnos, label: "Turnos" },
   ];
 
   const secondaryTabs: NavTab[] =
     user?.role === "admin"
       ? [
+          { path: "/inventory", icon: icons.inventario, label: "Productos" },
+          { path: "/movements", icon: icons.movimientos, label: "Movimientos" },
           { path: "/summary", icon: icons.resumen, label: "Resumen" },
           { path: "/users", icon: icons.usuarios, label: "Usuarios" },
         ]
-      : [];
+      : [{ path: "/inventory", icon: icons.inventario, label: "Productos" }];
 
   useEffect(() => {
     setShowMore(false);

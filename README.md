@@ -32,6 +32,10 @@ Aplicacion web movil, offline-first, para registrar ventas diarias de forma rapi
 - Correo automatico con resumen diario a las 9:00 PM hora Mexico
 - Validacion estricta de datos (precios > 0, cantidades > 0, totales verificados)
 
+## Estrategia de Producto
+
+- Ver [docs/PRODUCT_STRATEGY.md](docs/PRODUCT_STRATEGY.md) para la propuesta de foco, reestructura y roadmap de Sweet Home como producto real.
+
 ---
 
 ## Roles de Usuario

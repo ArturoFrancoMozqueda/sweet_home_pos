@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type DBSale, type DBSaleItem } from "../db/database";
 import type { DailyReport } from "../types";
@@ -138,6 +138,23 @@ export function DailySummary() {
       setLoading(false);
     });
   }, [selectedDate, localSaleItems, localSales]);
+
+  const attentionItems = useMemo(() => {
+    if (!report) return [];
+    const topMap = new Map(report.top_products.map((product) => [product.name, product]));
+    return report.low_stock_products
+      .map((product) => {
+        const top = topMap.get(product.name);
+        if (product.stock === 0) {
+          return `${product.name}: agotado. Conviene reponer hoy mismo.`;
+        }
+        if (top) {
+          return `${product.name}: stock bajo y alta rotación (${top.quantity} vendidas). Conviene producir o surtir pronto.`;
+        }
+        return `${product.name}: stock bajo (${product.stock} uds). Revísalo antes del siguiente pico de venta.`;
+      })
+      .slice(0, 4);
+  }, [report]);
 
   if (loading) {
     return (
@@ -312,6 +329,19 @@ export function DailySummary() {
                 <span className={`badge ${p.stock === 0 ? "badge-danger" : "badge-warning"}`}>
                   {p.stock} uds
                 </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {attentionItems.length > 0 && (
+        <div className="summary-section">
+          <h3 className="summary-section-title">Atención Sugerida</h3>
+          <div className="card" style={{ padding: "12px 16px" }}>
+            {attentionItems.map((item, index) => (
+              <div key={index} style={{ fontSize: "0.9rem", color: "var(--text)", padding: "6px 0" }}>
+                {item}
               </div>
             ))}
           </div>

@@ -34,6 +34,22 @@ async def sync_sales(
         select(Shift).where(Shift.user_id == current_user.id, Shift.closed_at.is_(None))
     )
     current_shift = shift_result.scalars().first()
+    if not current_shift:
+        product_query = select(Product).order_by(Product.name)
+        if current_user.role != "admin":
+            product_query = product_query.where(Product.active == True)  # noqa: E712
+        result = await db.execute(product_query)
+        return SyncResponse(
+            synced_uuids=[],
+            failed=[
+                SyncFailure(
+                    uuid=sale_data.client_uuid,
+                    reason="Necesitas un turno abierto antes de sincronizar ventas",
+                )
+                for sale_data in data.sales
+            ],
+            products=result.scalars().all(),
+        )
 
     for sale_data in data.sales:
         # Skip if already synced (deduplication by UUID)

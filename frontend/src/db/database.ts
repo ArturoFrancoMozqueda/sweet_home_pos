@@ -7,6 +7,8 @@ export interface DBProduct {
   stock: number;
   low_stock_threshold: number;
   active: boolean;
+  category?: string;
+  is_favorite?: boolean;
   cost_price?: number;
   image_url?: string;
   image_data?: string; // base64 data URL for offline display
@@ -100,6 +102,12 @@ class SweetHomeDB extends Dexie {
             }
           });
       });
+    // Version 7: category + is_favorite on products (no new indexes).
+    this.version(7).stores({
+      products: "id, name, active",
+      sales: "++id, client_uuid, created_at, synced, user_id",
+      saleItems: "++id, sale_uuid, product_id",
+    });
   }
 }
 

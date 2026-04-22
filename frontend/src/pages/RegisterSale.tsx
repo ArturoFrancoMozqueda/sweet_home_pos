@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type DBPayment, type DBProduct } from "../db/database";
@@ -104,6 +104,10 @@ export function RegisterSale() {
   const [shiftState, setShiftState] = useState<CachedShiftState | null>(() =>
     getCachedShiftState(user?.id)
   );
+  const [checkingShift, setCheckingShift] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   useEffect(() => {
     try {
@@ -126,15 +130,18 @@ export function RegisterSale() {
   }, [amountPaid, cart, discountInput, efectivoInput, paymentMode, user?.id]);
 
   useEffect(() => {
-    const cached = getCachedShiftState(user?.id);
-    if (!navigator.onLine) {
-      setShiftState(cached);
-      return;
-    }
+    let cancelled = false;
 
-    api
-      .get("/api/shifts/me/current")
-      .then((data) => {
+    const refreshShiftState = async () => {
+      const cached = getCachedShiftState(user?.id);
+      setShiftState(cached);
+
+      if (!navigator.onLine || !user?.id) return;
+
+      setCheckingShift(true);
+      try {
+        const data = await api.get("/api/shifts/me/current");
+        if (cancelled) return;
         const next = toShiftCache(user?.id, data);
         setShiftState(next);
         if (next) {
@@ -148,11 +155,64 @@ export function RegisterSale() {
             expected_cash: next.expected_cash,
           });
         }
-      })
-      .catch(() => setShiftState(cached));
+      } catch {
+        if (!cancelled) {
+          setShiftState(getCachedShiftState(user?.id));
+        }
+      } finally {
+        if (!cancelled) {
+          setCheckingShift(false);
+        }
+      }
+    };
+
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") {
+        refreshShiftState().catch(() => {});
+      }
+    };
+
+    const handleFocus = () => {
+      refreshShiftState().catch(() => {});
+    };
+
+    refreshShiftState().catch(() => {});
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisible);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisible);
+    };
   }, [user?.id]);
 
   const products = useLiveQuery(() => db.products.orderBy("name").toArray(), [], []);
+  const categories = useMemo(() => {
+    const unique = new Set(
+      (products ?? [])
+        .map((product) => product.category?.trim())
+        .filter((value): value is string => !!value)
+    );
+    return ["all", ...Array.from(unique).sort((a, b) => a.localeCompare(b, "es"))];
+  }, [products]);
+  const filteredProducts = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return [...(products ?? [])]
+      .filter((product) => product.active)
+      .filter((product) => (favoritesOnly ? !!product.is_favorite : true))
+      .filter((product) =>
+        selectedCategory === "all" ? true : (product.category || "") === selectedCategory
+      )
+      .filter((product) => {
+        if (!term) return true;
+        return `${product.name} ${product.category || ""}`.toLowerCase().includes(term);
+      })
+      .sort((a, b) => {
+        if (!!a.is_favorite !== !!b.is_favorite) return a.is_favorite ? -1 : 1;
+        return a.name.localeCompare(b.name, "es");
+      });
+  }, [favoritesOnly, products, search, selectedCategory]);
 
   const addToCart = (product: DBProduct) => {
     setCart((prev) => {
@@ -228,7 +288,9 @@ export function RegisterSale() {
 
   const hasShift = shiftState?.is_open === true;
   const shiftStatusKnown = shiftState !== null;
-  const shiftMessage = hasShift
+  const shiftMessage = checkingShift && !hasShift
+    ? "Verificando turno abierto..."
+    : hasShift
     ? ""
     : navigator.onLine
       ? "Necesitas abrir un turno antes de registrar ventas."
@@ -248,6 +310,8 @@ export function RegisterSale() {
   let registerLabel = `Registrar ${formatMoney(total)}`;
   if (saving) {
     registerLabel = "Guardando...";
+  } else if (checkingShift && !hasShift) {
+    registerLabel = "Verificando turno...";
   } else if (!hasShift) {
     registerLabel = "Abre un turno";
   } else if (discountTooHigh) {
@@ -362,14 +426,103 @@ export function RegisterSale() {
               className="btn btn-primary"
               style={{ padding: "8px 20px", minHeight: "auto", fontSize: "0.85rem" }}
               onClick={() => navigate("/shifts")}
+              disabled={checkingShift}
             >
               Abrir Turno
             </button>
+            {navigator.onLine && (
+              <button
+                className="btn btn-secondary"
+                style={{ padding: "8px 20px", minHeight: "auto", fontSize: "0.85rem", marginTop: 8 }}
+                onClick={() => {
+                  setCheckingShift(true);
+                  api
+                    .get("/api/shifts/me/current")
+                    .then((data) => {
+                      const next = toShiftCache(user?.id, data);
+                      setShiftState(next);
+                      if (next) {
+                        setCachedShiftState(user?.id, {
+                          shift_id: next.shift_id,
+                          is_open: next.is_open,
+                          opened_at: next.opened_at,
+                          opening_cash: next.opening_cash,
+                          cash_sales: next.cash_sales,
+                          transfer_sales: next.transfer_sales,
+                          expected_cash: next.expected_cash,
+                        });
+                      }
+                    })
+                    .catch(() => {
+                      showToast("No se pudo actualizar el turno");
+                    })
+                    .finally(() => setCheckingShift(false));
+                }}
+                disabled={checkingShift}
+              >
+                {checkingShift ? "Actualizando..." : "Actualizar turno"}
+              </button>
+            )}
           </div>
         )}
 
         {products && products.length > 0 ? (
-          <ProductGrid products={products} cart={cart} onAddToCart={addToCart} />
+          <>
+            <div className="sale-tools-card">
+              <div className="login-field" style={{ marginBottom: 10 }}>
+                <label>Buscar producto</label>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Ej. pastel, brownie, café..."
+                />
+              </div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <button
+                  type="button"
+                  className={`category-chip ${favoritesOnly ? "active" : ""}`}
+                  onClick={() => setFavoritesOnly((prev) => !prev)}
+                >
+                  ★ Favoritos
+                </button>
+                {(search || selectedCategory !== "all" || favoritesOnly) && (
+                  <button
+                    type="button"
+                    className="category-chip"
+                    onClick={() => {
+                      setSearch("");
+                      setSelectedCategory("all");
+                      setFavoritesOnly(false);
+                    }}
+                  >
+                    Limpiar filtros
+                  </button>
+                )}
+              </div>
+              <div className="category-chips">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    className={`category-chip ${selectedCategory === category ? "active" : ""}`}
+                    onClick={() => setSelectedCategory(category)}
+                  >
+                    {category === "all" ? "Todas" : category}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {filteredProducts.length > 0 ? (
+              <ProductGrid products={filteredProducts} cart={cart} onAddToCart={addToCart} />
+            ) : (
+              <div className="empty-state">
+                <p style={{ fontSize: "2rem" }}>🔎</p>
+                <p>No hay productos que coincidan con los filtros.</p>
+              </div>
+            )}
+          </>
         ) : (
           <div className="empty-state">
             <p style={{ fontSize: "2rem" }}>📦</p>

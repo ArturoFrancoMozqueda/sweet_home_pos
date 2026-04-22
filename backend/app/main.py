@@ -7,7 +7,16 @@ from sqlalchemy import text
 
 from app.config import UPLOADS_DIR, settings
 from app.database import async_session, engine, init_db
-from app.routers import products, reports, sales, shifts, sync
+from app.routers import (
+    cash_movements,
+    inventory_movements,
+    orders,
+    products,
+    reports,
+    sales,
+    shifts,
+    sync,
+)
 from app.routers import auth as auth_router
 from app.seed import seed_products
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -101,6 +110,82 @@ async def _migrate_shifts():
         await conn.execute(text(
             "ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id INTEGER REFERENCES shifts(id)"
         ))
+        for stmt in [
+            "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS cash_in NUMERIC(10,2)",
+            "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS cash_out NUMERIC(10,2)",
+        ]:
+            try:
+                await conn.execute(text(stmt))
+            except Exception:
+                pass
+
+
+async def _migrate_product_catalog_fields():
+    """Idempotent migration: add category and favorite flags to products."""
+    async with engine.begin() as conn:
+        for stmt in [
+            "ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(60)",
+            "ALTER TABLE products ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN NOT NULL DEFAULT FALSE",
+        ]:
+            try:
+                await conn.execute(text(stmt))
+            except Exception:
+                pass
+
+
+async def _migrate_orders():
+    """Idempotent migration: create orders table."""
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS orders (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                customer_name VARCHAR(120) NOT NULL,
+                customer_phone VARCHAR(30),
+                pickup_at TIMESTAMP NOT NULL,
+                status VARCHAR(30) NOT NULL DEFAULT 'new',
+                total_amount NUMERIC(10,2) NOT NULL,
+                deposit_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+                notes VARCHAR(500),
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """))
+
+
+async def _migrate_cash_movements():
+    """Idempotent migration: create cash movements table."""
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS cash_movements (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                shift_id INTEGER NOT NULL REFERENCES shifts(id),
+                movement_type VARCHAR(20) NOT NULL,
+                amount NUMERIC(10,2) NOT NULL,
+                reason VARCHAR(80) NOT NULL,
+                notes VARCHAR(300),
+                created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """))
+
+
+async def _migrate_inventory_movements():
+    """Idempotent migration: create inventory movements table."""
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS inventory_movements (
+                id SERIAL PRIMARY KEY,
+                product_id INTEGER NOT NULL REFERENCES products(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                movement_type VARCHAR(30) NOT NULL,
+                quantity_delta INTEGER NOT NULL,
+                resulting_stock INTEGER NOT NULL,
+                reason VARCHAR(80) NOT NULL,
+                notes VARCHAR(300),
+                created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """))
 
 
 @asynccontextmanager
@@ -114,6 +199,10 @@ async def lifespan(app: FastAPI):
     await _migrate_image_url()
     await _migrate_numeric_columns()
     await _migrate_shifts()
+    await _migrate_product_catalog_fields()
+    await _migrate_orders()
+    await _migrate_cash_movements()
+    await _migrate_inventory_movements()
     # Add cost_price column to products
     async with engine.begin() as conn:
         await conn.execute(text(
@@ -212,6 +301,9 @@ app.include_router(sales.router)
 app.include_router(reports.router)
 app.include_router(sync.router)
 app.include_router(shifts.router)
+app.include_router(orders.router)
+app.include_router(cash_movements.router)
+app.include_router(inventory_movements.router)
 
 # Images are now stored in PostgreSQL and served via /api/products/images/{uuid}
 

@@ -37,6 +37,7 @@ function ProductCard({
       disabled={outOfStock}
     >
       {qty > 0 && <span className="cart-badge">{qty}</span>}
+      {product.is_favorite && <span className="product-favorite-badge">★</span>}
       <div className="product-img-wrapper">
         {showPlaceholder ? (
           <div className="product-img-placeholder">🍪</div>
@@ -51,6 +52,7 @@ function ProductCard({
         )}
       </div>
       <span className="product-name">{product.name}</span>
+      {product.category && <span className="product-category">{product.category}</span>}
       <span className="product-price">${product.price}</span>
       {outOfStock && <span className="product-out-label">Agotado</span>}
     </button>

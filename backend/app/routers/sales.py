@@ -84,6 +84,11 @@ async def create_sale(
         select(Shift).where(Shift.user_id == current_user.id, Shift.closed_at.is_(None))
     )
     current_shift = shift_result.scalars().first()
+    if not current_shift:
+        raise HTTPException(
+            status_code=400,
+            detail="Necesitas un turno abierto antes de registrar ventas",
+        )
 
     sale = Sale(
         client_uuid=data.client_uuid,

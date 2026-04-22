@@ -24,6 +24,8 @@ class ShiftResponse(BaseModel):
     expected_cash: Optional[float] = None
     cash_sales: Optional[float] = None
     transfer_sales: Optional[float] = None
+    cash_in: Optional[float] = None
+    cash_out: Optional[float] = None
     variance: Optional[float] = None
     notes: Optional[str] = None
 

@@ -9,9 +9,11 @@ import { useSessionWarning } from "./hooks/useSessionWarning";
 import { db } from "./db/database";
 import { RegisterSale } from "./pages/RegisterSale";
 import { Inventory } from "./pages/Inventory";
+import { InventoryMovements } from "./pages/InventoryMovements";
 import { DailySummary } from "./pages/DailySummary";
 import { SalesHistory } from "./pages/SalesHistory";
 import { Login } from "./pages/Login";
+import { Orders } from "./pages/Orders";
 import { Users } from "./pages/Users";
 import { Shifts } from "./pages/Shifts";
 
@@ -32,11 +34,13 @@ function AuthenticatedApp({ user }: { user: import("./contexts/AuthContext").Aut
       />
       <Routes>
         <Route path="/" element={<RegisterSale />} />
+        <Route path="/orders" element={<Orders />} />
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/history" element={<SalesHistory />} />
         <Route path="/shifts" element={<Shifts />} />
         {user.role === "admin" && (
           <>
+            <Route path="/movements" element={<InventoryMovements />} />
             <Route path="/summary" element={<DailySummary />} />
             <Route path="/users" element={<Users />} />
           </>
