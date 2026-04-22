@@ -9,7 +9,6 @@ import { useSessionWarning } from "./hooks/useSessionWarning";
 import { db } from "./db/database";
 import { RegisterSale } from "./pages/RegisterSale";
 import { Inventory } from "./pages/Inventory";
-import { InventoryMovements } from "./pages/InventoryMovements";
 import { DailySummary } from "./pages/DailySummary";
 import { SalesHistory } from "./pages/SalesHistory";
 import { Login } from "./pages/Login";
@@ -40,7 +39,6 @@ function AuthenticatedApp({ user }: { user: import("./contexts/AuthContext").Aut
         <Route path="/shifts" element={<Shifts />} />
         {user.role === "admin" && (
           <>
-            <Route path="/movements" element={<InventoryMovements />} />
             <Route path="/summary" element={<DailySummary />} />
             <Route path="/users" element={<Users />} />
           </>

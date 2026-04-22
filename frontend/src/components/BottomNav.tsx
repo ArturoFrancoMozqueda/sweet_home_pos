@@ -38,11 +38,6 @@ const icons = {
       <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
-  movimientos: (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M13 7h8m0 0l-3-3m3 3l-3 3M11 17H3m0 0l3-3m-3 3l3 3M7 7H3m0 0l3-3M3 7l3 3m12 7h3m0 0l-3-3m3 3l-3 3" />
-    </svg>
-  ),
   more: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 6h.01M12 12h.01M12 18h.01" />
@@ -77,7 +72,6 @@ export function BottomNav() {
     user?.role === "admin"
       ? [
           { path: "/inventory", icon: icons.inventario, label: "Productos" },
-          { path: "/movements", icon: icons.movimientos, label: "Movimientos" },
           { path: "/summary", icon: icons.resumen, label: "Resumen" },
           { path: "/users", icon: icons.usuarios, label: "Usuarios" },
         ]
